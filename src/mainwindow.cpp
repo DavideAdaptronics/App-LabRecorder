@@ -7,6 +7,7 @@
 #include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QCompleter>  // [ADAPTRONICS] necessario per setCaseSensitivity sui QComboBox
 #include <QTextStream> // [ADAPTRONICS] necessario per leggere LabRecorder_AT.csv
 #if QT_VERSION_MAJOR < 6
 #include <QRegExp>
