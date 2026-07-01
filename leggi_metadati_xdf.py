@@ -54,7 +54,7 @@ def leggi_fileheader(percorso):
             print("  Probabilmente è un file registrato con la versione precedente.")
 
 # Modifica questo percorso con il tuo file XDF
-PERCORSO_XDF = r"C:\Registrazioni\Adaptronics\91912ww\run_001.xdf"
+PERCORSO_XDF = r"C:\Registrazioni\Adaptronics\IDCAD_91912\PATCH002\run_001.xdf"
 
 print(f"File: {PERCORSO_XDF}\n")
 leggi_fileheader(PERCORSO_XDF)

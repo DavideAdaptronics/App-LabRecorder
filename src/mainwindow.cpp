@@ -688,6 +688,7 @@ void MainWindow::loadAtCsv(const QString &cfgDir) {
 	//   Quando l'utente scrive "91", la tendina mostra solo le voci che iniziano con "91".
 	//   blockSignals evita che la cascata (CAD → Patch) scatti ad ogni tasto premuto.
 	ui->lineEdit_acq->addItems(atCsvData_["CAD"]);
+	ui->lineEdit_acq->setCurrentIndex(-1); // [ADAPTRONICS] campo vuoto all'avvio
 	connect(ui->lineEdit_acq->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
 		const QStringList &fullList = atCsvData_["CAD"];
 		ui->lineEdit_acq->blockSignals(true);
@@ -697,7 +698,6 @@ void MainWindow::loadAtCsv(const QString &cfgDir) {
 				ui->lineEdit_acq->addItem(item);
 		ui->lineEdit_acq->setEditText(text);
 		ui->lineEdit_acq->blockSignals(false);
-		if (ui->lineEdit_acq->count() > 0) ui->lineEdit_acq->showPopup();
 	});
 	// [ADAPTRONICS] END — filtro ID CAD
 
@@ -713,20 +713,50 @@ void MainWindow::loadAtCsv(const QString &cfgDir) {
 				ui->lineEdit_participant->addItem(item);
 		ui->lineEdit_participant->setEditText(text);
 		ui->lineEdit_participant->blockSignals(false);
-		if (ui->lineEdit_participant->count() > 0) ui->lineEdit_participant->showPopup();
 	});
 	// [ADAPTRONICS] END — filtro ID Patch
 
 	// popola pannello metadati destra (indipendenti, nessuna cascata)
+	// [ADAPTRONICS] BEGIN — popola metadati con filtro "inizia con" e campo vuoto all'avvio
 	ui->comboBox_meta_operator->addItems(atCsvData_["OPERATOR"]);
-	if (ui->comboBox_meta_operator->completer())
-		ui->comboBox_meta_operator->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+	ui->comboBox_meta_operator->setCurrentIndex(-1);
+	connect(ui->comboBox_meta_operator->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
+		const QStringList &list = atCsvData_["OPERATOR"];
+		ui->comboBox_meta_operator->blockSignals(true);
+		ui->comboBox_meta_operator->clear();
+		for (const QString &item : list)
+			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
+				ui->comboBox_meta_operator->addItem(item);
+		ui->comboBox_meta_operator->setEditText(text);
+		ui->comboBox_meta_operator->blockSignals(false);
+	});
+
 	ui->comboBox_meta_material->addItems(atCsvData_["MATERIAL"]);
-	if (ui->comboBox_meta_material->completer())
-		ui->comboBox_meta_material->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+	ui->comboBox_meta_material->setCurrentIndex(-1);
+	connect(ui->comboBox_meta_material->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
+		const QStringList &list = atCsvData_["MATERIAL"];
+		ui->comboBox_meta_material->blockSignals(true);
+		ui->comboBox_meta_material->clear();
+		for (const QString &item : list)
+			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
+				ui->comboBox_meta_material->addItem(item);
+		ui->comboBox_meta_material->setEditText(text);
+		ui->comboBox_meta_material->blockSignals(false);
+	});
+
 	ui->comboBox_meta_test->addItems(atCsvData_["TEST"]);
-	if (ui->comboBox_meta_test->completer())
-		ui->comboBox_meta_test->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+	ui->comboBox_meta_test->setCurrentIndex(-1);
+	connect(ui->comboBox_meta_test->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
+		const QStringList &list = atCsvData_["TEST"];
+		ui->comboBox_meta_test->blockSignals(true);
+		ui->comboBox_meta_test->clear();
+		for (const QString &item : list)
+			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
+				ui->comboBox_meta_test->addItem(item);
+		ui->comboBox_meta_test->setEditText(text);
+		ui->comboBox_meta_test->blockSignals(false);
+	});
+	// [ADAPTRONICS] END — filtri metadati
 }
 // [FINE ADAPTRONICS]
 
