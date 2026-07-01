@@ -7,8 +7,9 @@
 #include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
-#include <QCompleter>  // [ADAPTRONICS] necessario per setCaseSensitivity sui QComboBox
-#include <QTextStream> // [ADAPTRONICS] necessario per leggere LabRecorder_AT.csv
+#include <QCompleter>    // [ADAPTRONICS] necessario per setCaseSensitivity sui QComboBox
+#include <QPlainTextEdit> // [ADAPTRONICS] necessario per il campo Note multilinea
+#include <QTextStream>   // [ADAPTRONICS] necessario per leggere LabRecorder_AT.csv
 #if QT_VERSION_MAJOR < 6
 #include <QRegExp>
 #else
@@ -494,7 +495,7 @@ void MainWindow::startRecording() {
 		sessionMetadata["operator"]    = ui->comboBox_meta_operator->currentText().toStdString();
 		sessionMetadata["material_id"] = ui->comboBox_meta_material->currentText().toStdString();
 		sessionMetadata["test_id"]     = ui->comboBox_meta_test->currentText().toStdString();
-		sessionMetadata["note"]        = ui->lineEdit_meta_note->text().toStdString();
+		sessionMetadata["note"]        = ui->plainTextEdit_meta_note->toPlainText().toStdString(); // [ADAPTRONICS] QPlainTextEdit → toPlainText()
 		// [ADAPTRONICS] END — raccolta metadati sessione
 
 		currentRecording = std::make_unique<recording>(recFilename.toStdString(),
@@ -683,10 +684,38 @@ void MainWindow::loadAtCsv(const QString &cfgDir) {
 		QString key      = parentId.isEmpty() ? type : type + ":" + parentId;
 		atCsvData_[key].append(id);
 	}
-	// popola CAD ID (livello radice) e imposta autocomplete case insensitive
+	// [ADAPTRONICS] BEGIN — popola ID CAD e collega filtro "inizia con" mentre l'utente digita
+	//   Quando l'utente scrive "91", la tendina mostra solo le voci che iniziano con "91".
+	//   blockSignals evita che la cascata (CAD → Patch) scatti ad ogni tasto premuto.
 	ui->lineEdit_acq->addItems(atCsvData_["CAD"]);
-	if (ui->lineEdit_acq->completer())
-		ui->lineEdit_acq->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+	connect(ui->lineEdit_acq->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
+		const QStringList &fullList = atCsvData_["CAD"];
+		ui->lineEdit_acq->blockSignals(true);
+		ui->lineEdit_acq->clear();
+		for (const QString &item : fullList)
+			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
+				ui->lineEdit_acq->addItem(item);
+		ui->lineEdit_acq->setEditText(text);
+		ui->lineEdit_acq->blockSignals(false);
+		if (ui->lineEdit_acq->count() > 0) ui->lineEdit_acq->showPopup();
+	});
+	// [ADAPTRONICS] END — filtro ID CAD
+
+	// [ADAPTRONICS] BEGIN — popola ID Patch e collega filtro "inizia con"
+	//   Filtra tra i PATCH figli del CAD attualmente selezionato.
+	connect(ui->lineEdit_participant->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
+		const QString cadText = ui->lineEdit_acq->currentText();
+		const QStringList patchList = atCsvData_["PATCH:" + cadText];
+		ui->lineEdit_participant->blockSignals(true);
+		ui->lineEdit_participant->clear();
+		for (const QString &item : patchList)
+			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
+				ui->lineEdit_participant->addItem(item);
+		ui->lineEdit_participant->setEditText(text);
+		ui->lineEdit_participant->blockSignals(false);
+		if (ui->lineEdit_participant->count() > 0) ui->lineEdit_participant->showPopup();
+	});
+	// [ADAPTRONICS] END — filtro ID Patch
 
 	// popola pannello metadati destra (indipendenti, nessuna cascata)
 	ui->comboBox_meta_operator->addItems(atCsvData_["OPERATOR"]);
