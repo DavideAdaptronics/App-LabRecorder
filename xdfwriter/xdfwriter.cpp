@@ -17,7 +17,30 @@ void write_timestamp(std::ostream &out, double ts) {
 	}
 }
 
-XDFWriter::XDFWriter(const std::string &filename)
+// [ADAPTRONICS] BEGIN — funzione di escape XML
+//   Sostituisce i 5 caratteri speciali XML con le entità sicure.
+//   Necessario per evitare XML malformato se l'operatore digita & < > " ' nei campi.
+static std::string xml_escape(const std::string &s) {
+	std::string out;
+	out.reserve(s.size());
+	for (char c : s) {
+		if      (c == '&')  out += "&amp;";
+		else if (c == '<')  out += "&lt;";
+		else if (c == '>')  out += "&gt;";
+		else if (c == '"')  out += "&quot;";
+		else if (c == '\'') out += "&apos;";
+		else                out += c;
+	}
+	return out;
+}
+// [ADAPTRONICS] END — funzione di escape XML
+
+// [ADAPTRONICS] BEGIN — costruttore esteso con parametro metadata
+//   I metadati sessione (ID CAD, ID Patch, Operator, ecc.) vengono scritti
+//   nel blocco <adaptronics> all'interno della FileHeader XDF, così ogni
+//   lettore XDF (MNE, EEGLAB, tool ML/DL) li trova direttamente nel file.
+XDFWriter::XDFWriter(const std::string &filename,
+                     const std::map<std::string, std::string> &metadata)
 #ifndef XDFZ_SUPPORT
 	: file_(filename, std::ios::binary | std::ios::trunc)
 #endif
@@ -36,9 +59,22 @@ XDFWriter::XDFWriter(const std::string &filename)
 	// datetime
 	std::time_t now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
 	header << "\n    <datetime>" << std::put_time(std::localtime(&now), "%FT%T%z") << "</datetime>";
+	// [ADAPTRONICS] BEGIN — blocco metadati sessione Adaptronics
+	//   Scritto solo se ci sono metadati da inserire.
+	//   Formato risultante nell'XML: <adaptronics><cad_id>...</cad_id>...</adaptronics>
+	if (!metadata.empty()) {
+		header << "\n    <adaptronics>";
+		for (const auto &kv : metadata) {
+			header << "\n      <" << kv.first << ">" << xml_escape(kv.second)
+			       << "</" << kv.first << ">";
+		}
+		header << "\n    </adaptronics>";
+	}
+	// [ADAPTRONICS] END — blocco metadati sessione
 	header << "\n  </info>";
 	_write_chunk(chunk_tag_t::fileheader, header.str());
 }
+// [ADAPTRONICS] END — costruttore esteso
 
 void XDFWriter::_write_chunk(
 	chunk_tag_t tag, const std::string &content, const streamid_t *streamid_p) {

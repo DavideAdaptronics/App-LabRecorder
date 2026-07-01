@@ -81,10 +81,13 @@ inline void timed_join_or_detach(
 	}
 }
 
+// [ADAPTRONICS] BEGIN — costruttore esteso: accetta metadata e li passa a XDFWriter
+//   Il parametro metadata (std::map<string,string>) viene inoltrato al costruttore
+//   di XDFWriter, che li scrive nel blocco <adaptronics> della FileHeader XDF.
 recording::recording(const std::string &filename, const std::vector<lsl::stream_info> &streams,
 	const std::vector<std::string> &watchfor, std::map<std::string, int> syncOptions,
-	bool collect_offsets)
-	: file_(filename), offsets_enabled_(collect_offsets), unsorted_(false), streamid_(0),
+	bool collect_offsets, const std::map<std::string, std::string> &metadata)
+	: file_(filename, metadata), offsets_enabled_(collect_offsets), unsorted_(false), streamid_(0),
 	  shutdown_(false), headers_to_finish_(0), streaming_to_finish_(0),
 	  sync_options_by_stream_(std::move(syncOptions)) {
 	// create a recording thread for each stream
@@ -98,6 +101,7 @@ recording::recording(const std::string &filename, const std::vector<lsl::stream_
 	// create a boundary chunk writer thread
 	boundary_thread_ = std::make_unique<std::thread>(&recording::record_boundaries, this);
 }
+// [ADAPTRONICS] END — costruttore esteso
 
 recording::~recording() {
 	try {

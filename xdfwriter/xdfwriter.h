@@ -3,8 +3,10 @@
 #include "conversions.h"
 
 #include <cassert>
+#include <map>    // [ADAPTRONICS] per std::map<string,string> metadata sessione
 #include <mutex>
 #include <sstream>
+#include <string> // [ADAPTRONICS] per std::string nei metadati
 #include <thread>
 #include <type_traits>
 #include <vector>
@@ -45,8 +47,13 @@ public:
 	/**
 	 * @brief XDFWriter Construct a XDFWriter object
 	 * @param filename  Filename to write to
+	 * @param metadata  [ADAPTRONICS] metadati sessione da scrivere nella FileHeader XDF
+	 *                  (chiave → valore; verranno inseriti nel blocco <adaptronics>)
 	 */
-	XDFWriter(const std::string &filename);
+	// [ADAPTRONICS] BEGIN — aggiunto parametro metadata per scrivere i metadati nella FileHeader XDF
+	XDFWriter(const std::string &filename,
+	          const std::map<std::string, std::string> &metadata = {});
+	// [ADAPTRONICS] END
 
 	template <typename T>
 	void write_data_chunk(streamid_t streamid, const std::vector<double> &timestamps,

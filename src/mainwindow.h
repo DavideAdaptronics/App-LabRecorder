@@ -82,6 +82,12 @@ private:
 	QString legacyTemplate;
 	std::unique_ptr<Ui::MainWindow> ui; // window pointer
 
+	// [ADAPTRONICS] struttura dati per menu a tendina a cascata popolati da LabRecorder_AT.csv
+	// chiave: "TYPE" per livello radice, "TYPE:PARENT_ID" per livelli figli
+	// esempio: "CAD" -> ["91912","91913"], "PROD:91912" -> ["292929","293000"]
+	QMap<QString, QStringList> atCsvData_;
+	void loadAtCsv(const QString &cfgDir);
+
 	// @Doug1983 added to suppress pop-ups when remotely starting recording
 	// and missing streams or having some unchecked streams
 	bool hideWarnings = false;

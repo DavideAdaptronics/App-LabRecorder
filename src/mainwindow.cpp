@@ -7,6 +7,7 @@
 #include <QMessageBox>
 #include <QSettings>
 #include <QStandardPaths>
+#include <QTextStream> // [ADAPTRONICS] necessario per leggere LabRecorder_AT.csv
 #if QT_VERSION_MAJOR < 6
 #include <QRegExp>
 #else
@@ -66,10 +67,21 @@ MainWindow::MainWindow(QWidget *parent, const char *config_file)
 		this->buildFilename();
 	});
 	connect(ui->rootEdit, &QLineEdit::editingFinished, this, &MainWindow::buildFilename);
-	connect(
-		ui->lineEdit_participant, &QLineEdit::editingFinished, this, &MainWindow::buildFilename);
-	connect(ui->lineEdit_session, &QLineEdit::editingFinished, this, &MainWindow::buildFilename);
-	connect(ui->lineEdit_acq, &QLineEdit::editingFinished, this, &MainWindow::buildFilename);
+	// [ADAPTRONICS] segnale cambiato da QLineEdit::editingFinished a QComboBox::currentTextChanged
+	//               perché i tre campi sono stati convertiti in QComboBox editabili
+	connect(ui->lineEdit_participant, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
+	connect(ui->lineEdit_session, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
+	connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
+
+	// [ADAPTRONICS] tendina a cascata: CAD ID → ID Patch direttamente (Production Code rimosso)
+	// quando CAD ID cambia: ripopola ID Patch con i PATCH figli del CAD selezionato
+	connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, [this](const QString &text) {
+		ui->lineEdit_participant->clear();
+		ui->lineEdit_participant->addItems(atCsvData_["PATCH:" + text]);
+		if (ui->lineEdit_participant->completer())
+			ui->lineEdit_participant->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+	});
+	// [FINE ADAPTRONICS] tendina a cascata
 	connect(ui->input_blocktask, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
 	connect(ui->input_modality, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
 	connect(ui->check_bids, &QCheckBox::toggled, this, [this](bool checked) {
@@ -262,7 +274,13 @@ void MainWindow::load_config(QString filename) {
 		}
 
 	} catch (std::exception &e) { qWarning() << "Problem parsing config file: " << e.what(); }
-	// std::cout << "refreshing streams ..." <<std::endl;
+
+	// [ADAPTRONICS] carica il CSV per le tendine a cascata dalla stessa cartella del .cfg
+	QString csvDir = filename.isEmpty()
+		? QFileInfo(QCoreApplication::applicationFilePath()).absolutePath()
+		: QFileInfo(filename).absolutePath();
+	loadAtCsv(csvDir);
+
 	refreshStreams();
 
 	if (auto_start) { startRecording(); }
@@ -466,8 +484,20 @@ void MainWindow::startRecording() {
 		}
 		qInfo() << "Missing: " << missingStreams;
 
+		// [ADAPTRONICS] BEGIN — raccolta metadati sessione dai widget dell'interfaccia
+		//   I valori vengono passati a recording → XDFWriter e scritti nella FileHeader XDF
+		//   nel blocco <adaptronics>, leggibile da qualsiasi parser XDF (MNE, EEGLAB, ecc.)
+		std::map<std::string, std::string> sessionMetadata;
+		sessionMetadata["cad_id"]      = ui->lineEdit_acq->currentText().toStdString();
+		sessionMetadata["patch_id"]    = ui->lineEdit_participant->currentText().toStdString();
+		sessionMetadata["operator"]    = ui->comboBox_meta_operator->currentText().toStdString();
+		sessionMetadata["material_id"] = ui->comboBox_meta_material->currentText().toStdString();
+		sessionMetadata["test_id"]     = ui->comboBox_meta_test->currentText().toStdString();
+		sessionMetadata["note"]        = ui->lineEdit_meta_note->text().toStdString();
+		// [ADAPTRONICS] END — raccolta metadati sessione
+
 		currentRecording = std::make_unique<recording>(recFilename.toStdString(),
-			requestedAndAvailableStreams, watchfor, syncOptionsByStreamName, true);
+			requestedAndAvailableStreams, watchfor, syncOptionsByStreamName, true, sessionMetadata);
 		ui->stopButton->setEnabled(true);
 		ui->startButton->setEnabled(false);
 		startTime = (int)lsl::local_clock();
@@ -511,8 +541,9 @@ void MainWindow::buildBidsTemplate() {
 	// path/to/CurrentStudy/sub-%p/ses-%s/eeg/sub-%p_ses-%s_task-%b[_acq-%a]_run-%r_eeg.xdf
 
 	// Make sure the BIDS required fields are full.
-	if (ui->lineEdit_participant->text().isEmpty()) { ui->lineEdit_participant->setText("P001"); }
-	if (ui->lineEdit_session->text().isEmpty()) { ui->lineEdit_session->setText("S001"); }
+	// [ADAPTRONICS] .text()/.setText() → .currentText()/.setCurrentText() per QComboBox
+	if (ui->lineEdit_participant->currentText().isEmpty()) { ui->lineEdit_participant->setCurrentText("P001"); }
+	if (ui->lineEdit_session->currentText().isEmpty()) { ui->lineEdit_session->setCurrentText("S001"); }
 	if (ui->input_blocktask->currentText().isEmpty()) {
 		ui->input_blocktask->setCurrentText("Default");
 	}
@@ -527,7 +558,7 @@ void MainWindow::buildBidsTemplate() {
 
 	// filename
 	QString fname = "sub-%p_ses-%s_task-%b";
-	if (!ui->lineEdit_acq->text().isEmpty()) { fname.append("_acq-%a"); }
+	if (!ui->lineEdit_acq->currentText().isEmpty()) { fname.append("_acq-%a"); } // [ADAPTRONICS] .text() → .currentText() (QComboBox)
 	fname.append("_run-%r_%m.xdf");
 	fileparts << fname;
 	ui->lineEdit_template->setText(QDir::toNativeSeparators(fileparts.join('/')));
@@ -566,9 +597,10 @@ QString MainWindow::replaceFilename(QString fullfile) const {
 	// path/to/study/sub-<participant_label>/ses-<session_label>/eeg/sub-<participant_label>_ses-<session_label>_task-<task_label>[_acq-<acq_label>]_run-<run_index>_eeg.xdf
 	// path/to/study/sub-%p/ses-%s/eeg/sub-%p_ses-%s_task-%b[_acq-%a]_run-%r_eeg.xdf
 	// %b already replaced above.
-	fullfile.replace("%p", ui->lineEdit_participant->text());
-	fullfile.replace("%s", ui->lineEdit_session->text());
-	fullfile.replace("%a", ui->lineEdit_acq->text());
+	// [ADAPTRONICS] .text() → .currentText() perché i campi sono ora QComboBox editabili
+	fullfile.replace("%p", ui->lineEdit_participant->currentText());
+	fullfile.replace("%s", ui->lineEdit_session->currentText());
+	fullfile.replace("%a", ui->lineEdit_acq->currentText());
 	fullfile.replace("%m", ui->input_modality->currentText());
 
 	// Replace either %r or %n with the counter
@@ -626,6 +658,47 @@ void MainWindow::printReplacedFilename() {
 	ui->locationLabel->setText(
 		ui->rootEdit->text() + '\n' + replaceFilename(ui->lineEdit_template->text()));
 }
+
+// [ADAPTRONICS] legge LabRecorder_AT.csv e popola atCsvData_ per le tendine a cascata
+// formato CSV: TYPE,ID,PARENT_ID (prima riga = intestazione, ignorata)
+// esempio riga: PROD,292929,91912
+void MainWindow::loadAtCsv(const QString &cfgDir) {
+	QString csvPath = cfgDir + "/LabRecorder_AT.csv";
+	QFile file(csvPath);
+	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+		qInfo() << "[ADAPTRONICS] LabRecorder_AT.csv non trovato in: " << cfgDir;
+		return;
+	}
+	QTextStream in(&file);
+	in.readLine(); // salta intestazione TYPE,ID,PARENT_ID
+	while (!in.atEnd()) {
+		QString line = in.readLine().trimmed();
+		if (line.isEmpty()) continue;
+		QStringList parts = line.split(',');
+		if (parts.size() < 2) continue;
+		QString type     = parts[0].trimmed().toUpper();
+		QString id       = parts[1].trimmed();
+		QString parentId = parts.size() > 2 ? parts[2].trimmed() : "";
+		QString key      = parentId.isEmpty() ? type : type + ":" + parentId;
+		atCsvData_[key].append(id);
+	}
+	// popola CAD ID (livello radice) e imposta autocomplete case insensitive
+	ui->lineEdit_acq->addItems(atCsvData_["CAD"]);
+	if (ui->lineEdit_acq->completer())
+		ui->lineEdit_acq->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+
+	// popola pannello metadati destra (indipendenti, nessuna cascata)
+	ui->comboBox_meta_operator->addItems(atCsvData_["OPERATOR"]);
+	if (ui->comboBox_meta_operator->completer())
+		ui->comboBox_meta_operator->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+	ui->comboBox_meta_material->addItems(atCsvData_["MATERIAL"]);
+	if (ui->comboBox_meta_material->completer())
+		ui->comboBox_meta_material->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+	ui->comboBox_meta_test->addItems(atCsvData_["TEST"]);
+	if (ui->comboBox_meta_test->completer())
+		ui->comboBox_meta_test->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+}
+// [FINE ADAPTRONICS]
 
 MainWindow::~MainWindow() noexcept = default;
 
@@ -703,11 +776,11 @@ void MainWindow::rcsUpdateFilename(QString s) {
 		} else if (option.toLower() == "run") {
 			ui->spin_counter->setValue(value.toInt());
 		} else if (option.toLower() == "participant") {
-			ui->lineEdit_participant->setText(value);
+			ui->lineEdit_participant->setCurrentText(value); // [ADAPTRONICS] setText → setCurrentText per QComboBox
 		} else if (option.toLower() == "session") {
-			ui->lineEdit_session->setText(value);
+			ui->lineEdit_session->setCurrentText(value); // [ADAPTRONICS] setText → setCurrentText per QComboBox
 		} else if (option.toLower() == "acquisition") {
-			ui->lineEdit_acq->setText(value);
+			ui->lineEdit_acq->setCurrentText(value); // [ADAPTRONICS] setText → setCurrentText per QComboBox
 		} else if (option.toLower() == "modality") {
 			if (ui->input_modality->findText(value.toLower()) != -1)
 				ui->input_modality->setCurrentIndex(ui->input_modality->findText(value.toLower()));

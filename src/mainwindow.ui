@@ -6,8 +6,8 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>634</width>
-    <height>433</height>
+    <width>950</width>
+    <height>480</height>
    </rect>
   </property>
   <property name="windowTitle">
@@ -151,36 +151,58 @@
         </rect>
        </property>
        <layout class="QGridLayout" name="gridLayout_2">
+        <!-- [ADAPTRONICS] rinominato da "Counter" a "Run" per contesto industriale -->
         <item row="3" column="0">
          <widget class="QLabel" name="label_counter">
           <property name="text">
-           <string>Counter</string>
+           <string>Run (%n)</string>
           </property>
          </widget>
         </item>
+        <!-- [ADAPTRONICS] Production Code nascosto: eliminato per semplificazione struttura cartelle (sovrapposto a ID CAD) -->
         <item row="5" column="0">
          <widget class="QLabel" name="label_session">
           <property name="text">
-           <string>Session (%s)</string>
+           <string>Production Code (%s)</string>
+          </property>
+          <property name="visible">
+           <bool>false</bool>
           </property>
          </widget>
         </item>
+        <!-- [ADAPTRONICS] convertito da QLineEdit a QComboBox editabile per supporto menu a tendina da CSV -->
         <item row="4" column="1">
-         <widget class="QLineEdit" name="lineEdit_participant"/>
+         <widget class="QComboBox" name="lineEdit_participant">
+          <property name="editable">
+           <bool>true</bool>
+          </property>
+         </widget>
         </item>
         <item row="1" column="1">
          <widget class="QLineEdit" name="lineEdit_template"/>
         </item>
+        <!-- [ADAPTRONICS] Production Code nascosto: non più usato nella struttura cartelle -->
         <item row="5" column="1">
-         <widget class="QLineEdit" name="lineEdit_session"/>
+         <widget class="QComboBox" name="lineEdit_session">
+          <property name="editable">
+           <bool>true</bool>
+          </property>
+          <property name="visible">
+           <bool>false</bool>
+          </property>
+         </widget>
         </item>
         <item row="0" column="1">
          <widget class="QLineEdit" name="rootEdit"/>
         </item>
+        <!-- [ADAPTRONICS] Block/Task nascosto: non utilizzato nel contesto industriale Adaptronics -->
         <item row="2" column="0">
          <widget class="QLabel" name="label_currBlock">
           <property name="text">
            <string>Block/Task (%b):</string>
+          </property>
+          <property name="visible">
+           <bool>false</bool>
           </property>
          </widget>
         </item>
@@ -194,13 +216,19 @@
           </property>
          </widget>
         </item>
+        <!-- [ADAPTRONICS] convertito da QLineEdit a QComboBox editabile per supporto menu a tendina da CSV -->
         <item row="6" column="1">
-         <widget class="QLineEdit" name="lineEdit_acq"/>
+         <widget class="QComboBox" name="lineEdit_acq">
+          <property name="editable">
+           <bool>true</bool>
+          </property>
+         </widget>
         </item>
+        <!-- [ADAPTRONICS] rinominato da "Participant (%p)" a "ID Patch" per contesto industriale -->
         <item row="4" column="0">
          <widget class="QLabel" name="label_participant">
           <property name="text">
-           <string>Participant (%p)</string>
+           <string>ID Patch (%p)</string>
           </property>
          </widget>
         </item>
@@ -221,17 +249,22 @@
           </property>
          </widget>
         </item>
+        <!-- [ADAPTRONICS] rinominato da "Acq. (%a)" a "ID CAD" per contesto industriale -->
         <item row="6" column="0">
          <widget class="QLabel" name="label_acq">
           <property name="text">
-           <string>Acq. (%a)</string>
+           <string>ID CAD (%a)</string>
           </property>
          </widget>
         </item>
+        <!-- [ADAPTRONICS] BIDS nascosto: non rilevante per uso industriale. Il widget esiste ancora nel codice C++ -->
         <item row="1" column="2">
          <widget class="QCheckBox" name="check_bids">
           <property name="text">
            <string>BIDS</string>
+          </property>
+          <property name="visible">
+           <bool>false</bool>
           </property>
          </widget>
         </item>
@@ -266,12 +299,20 @@
           <property name="editable">
            <bool>true</bool>
           </property>
+          <!-- [ADAPTRONICS] input_blocktask nascosto: non utilizzato nel contesto industriale Adaptronics -->
+          <property name="visible">
+           <bool>false</bool>
+          </property>
          </widget>
         </item>
+        <!-- [ADAPTRONICS] Modality nascosto: non utilizzato nel contesto industriale Adaptronics -->
         <item row="7" column="0">
          <widget class="QLabel" name="label_modality">
           <property name="text">
            <string>Modality (%m)</string>
+          </property>
+          <property name="visible">
+           <bool>false</bool>
           </property>
          </widget>
         </item>
@@ -280,12 +321,72 @@
           <property name="editable">
            <bool>true</bool>
           </property>
+          <property name="visible">
+           <bool>false</bool>
+          </property>
          </widget>
         </item>
        </layout>
       </widget>
      </widget>
     </item>
+   <!-- [ADAPTRONICS] pannello metadati sessione: nuova colonna destra (col=2, rowspan=3) -->
+   <item row="0" column="2" rowspan="3">
+    <widget class="QGroupBox" name="groupBox_metadata">
+     <property name="title">
+      <string>Metadati Sessione</string>
+     </property>
+     <layout class="QGridLayout" name="gridLayout_metadata">
+      <item row="0" column="0">
+       <widget class="QLabel" name="label_meta_operator">
+        <property name="text"><string>Operator</string></property>
+       </widget>
+      </item>
+      <item row="0" column="1">
+       <widget class="QComboBox" name="comboBox_meta_operator">
+        <property name="editable"><bool>true</bool></property>
+       </widget>
+      </item>
+      <item row="1" column="0">
+       <widget class="QLabel" name="label_meta_material">
+        <property name="text"><string>Material ID</string></property>
+       </widget>
+      </item>
+      <item row="1" column="1">
+       <widget class="QComboBox" name="comboBox_meta_material">
+        <property name="editable"><bool>true</bool></property>
+       </widget>
+      </item>
+      <item row="2" column="0">
+       <widget class="QLabel" name="label_meta_test">
+        <property name="text"><string>Test ID</string></property>
+       </widget>
+      </item>
+      <item row="2" column="1">
+       <widget class="QComboBox" name="comboBox_meta_test">
+        <property name="editable"><bool>true</bool></property>
+       </widget>
+      </item>
+      <item row="3" column="0">
+       <widget class="QLabel" name="label_meta_note">
+        <property name="text"><string>Note</string></property>
+       </widget>
+      </item>
+      <item row="3" column="1">
+       <widget class="QLineEdit" name="lineEdit_meta_note"/>
+      </item>
+      <item row="4" column="0" colspan="2">
+       <spacer name="verticalSpacer_metadata">
+        <property name="orientation"><enum>Qt::Vertical</enum></property>
+        <property name="sizeHint" stdset="0">
+         <size><width>0</width><height>0</height></size>
+        </property>
+       </spacer>
+      </item>
+     </layout>
+    </widget>
+   </item>
+   <!-- [FINE ADAPTRONICS] pannello metadati -->
    </layout>
   </widget>
   <widget class="QMenuBar" name="menuBar">

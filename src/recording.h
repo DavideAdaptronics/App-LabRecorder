@@ -63,9 +63,12 @@ public:
 	 *there").
 	 * @param collect_offsets Whether to collect time offset measurements periodically.
 	 */
+	// [ADAPTRONICS] BEGIN — aggiunto parametro metadata per propagare i metadati sessione fino a XDFWriter
 	recording(const std::string &filename, const std::vector<lsl::stream_info> &streams,
 		const std::vector<std::string> &watchfor, std::map<std::string, int> syncOptions,
-		bool collect_offsets = true);
+		bool collect_offsets = true,
+		const std::map<std::string, std::string> &metadata = {});
+	// [ADAPTRONICS] END
 
 	/** Destructor.
 	 * Stops the recording and closes the file.
