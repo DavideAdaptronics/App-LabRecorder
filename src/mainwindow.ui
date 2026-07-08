@@ -384,7 +384,55 @@
         </property>
        </widget>
       </item>
+      <!-- [ADAPTRONICS] gruppo perno: 4 campi dipendenti da ID CAD, popolati da CSV -->
       <item row="4" column="0" colspan="2">
+       <widget class="QGroupBox" name="groupBox_perno">
+        <property name="title"><string>Perno</string></property>
+        <layout class="QGridLayout" name="gridLayout_perno">
+         <item row="0" column="0">
+          <widget class="QLabel" name="label_perno_materiale">
+           <property name="text"><string>Materiale</string></property>
+          </widget>
+         </item>
+         <item row="0" column="1">
+          <widget class="QComboBox" name="comboBox_meta_perno_materiale">
+           <property name="editable"><bool>true</bool></property>
+          </widget>
+         </item>
+         <item row="1" column="0">
+          <widget class="QLabel" name="label_perno_diametro">
+           <property name="text"><string>Diametro</string></property>
+          </widget>
+         </item>
+         <item row="1" column="1">
+          <widget class="QComboBox" name="comboBox_meta_perno_diametro">
+           <property name="editable"><bool>true</bool></property>
+          </widget>
+         </item>
+         <item row="2" column="0">
+          <widget class="QLabel" name="label_perno_numero">
+           <property name="text"><string>N. perni</string></property>
+          </widget>
+         </item>
+         <item row="2" column="1">
+          <widget class="QComboBox" name="comboBox_meta_perno_numero">
+           <property name="editable"><bool>true</bool></property>
+          </widget>
+         </item>
+         <item row="3" column="0">
+          <widget class="QLabel" name="label_perno_posizione">
+           <property name="text"><string>Posizione</string></property>
+          </widget>
+         </item>
+         <item row="3" column="1">
+          <widget class="QComboBox" name="comboBox_meta_perno_posizione">
+           <property name="editable"><bool>true</bool></property>
+          </widget>
+         </item>
+        </layout>
+       </widget>
+      </item>
+      <item row="5" column="0" colspan="2">
        <spacer name="verticalSpacer_metadata">
         <property name="orientation"><enum>Qt::Vertical</enum></property>
         <property name="sizeHint" stdset="0">

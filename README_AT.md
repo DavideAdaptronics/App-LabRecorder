@@ -12,7 +12,7 @@ Ogni modifica è contrassegnata nel codice con il commento `[ADAPTRONICS]`.
 Adattare LabRecorder a un contesto di test industriale su patch.
 Le modifiche principali riguardano:
 - Struttura cartelle: `ID_CAD / ID_Patch / run_001.xdf`
-- Pannello metadati aggiuntivo (Operator, Material ID, Test ID, Note)
+- Pannello metadati aggiuntivo (Operator, Material ID, Test ID, Note, gruppo Perno)
 - Metadati scritti nella FileHeader XDF nel blocco `<adaptronics>`
 - Menu a tendina cascata popolati da CSV (`LabRecorder_AT.csv`)
 - Adattamento dell'interfaccia grafica al workflow degli operatori
@@ -62,21 +62,28 @@ e la proprietà `editable = true`.
 
 ### 3. `src/mainwindow.ui` — Pannello metadati sessione (colonna destra)
 
-**Cosa:** aggiunto un `QGroupBox` "Metadati Sessione" come terza colonna a destra
-(`col=2, rowspan=3` per coprire tutta l'altezza). Contiene 4 campi:
+**Cosa:** aggiunto un `QGroupBox` "Metadati Sessione" come terza colonna a destra.
+Contiene i campi di sessione e il gruppo Perno:
 
 | Widget | Label | Tipo | Valori |
 |--------|-------|------|--------|
 | `comboBox_meta_operator` | Operator | QComboBox editabile | CSV TYPE=OPERATOR |
 | `comboBox_meta_material` | Material ID | QComboBox editabile | CSV TYPE=MATERIAL |
 | `comboBox_meta_test` | Test ID | QComboBox editabile | CSV TYPE=TEST |
-| `lineEdit_meta_note` | Note | QLineEdit | testo libero |
+| `plainTextEdit_meta_note` | Note | QPlainTextEdit | testo libero multilinea |
+| `comboBox_meta_perno_materiale` | Materiale | QComboBox editabile | CSV PERNO_MATERIALE:CAD |
+| `comboBox_meta_perno_diametro` | Diametro | QComboBox editabile | CSV PERNO_DIAMETRO:CAD |
+| `comboBox_meta_perno_numero` | N. perni | QComboBox editabile | CSV PERNO_NUMERO:CAD |
+| `comboBox_meta_perno_posizione` | Posizione | QComboBox editabile | CSV PERNO_POSIZIONE:CAD |
+
+I 4 campi Perno sono raggruppati in `QGroupBox "Perno"` e dipendono dall'ID CAD selezionato
+(cascata: cambio CAD → i dropdown si ripopolano con i figli dichiarati nel CSV).
 
 **Perché:** questi metadati non fanno parte della struttura cartelle ma vengono
 scritti nella FileHeader XDF per uso nel pipeline ML/DL.
 
 **Conflitti futuri:** blocco completamente nuovo, nessun elemento esistente toccato.
-In caso di conflitto, mantenere il blocco `<!-- [ADAPTRONICS] pannello metadati -->`.
+In caso di conflitto, mantenere i blocchi `<!-- [ADAPTRONICS] ... -->`.
 
 ---
 
@@ -90,22 +97,28 @@ In caso di conflitto, mantenere il blocco `<!-- [ADAPTRONICS] pannello metadati 
 Punti toccati: costruttore (connessioni segnali), `replaceFilename()`,
 `buildBidsTemplate()`, `rcsUpdateFilename()`.
 
-**Cosa B — cascata ID CAD → ID Patch:**
+**Cosa B — cascata ID CAD → ID Patch + 4 campi Perno:**
 Nel costruttore, aggiunta connessione lambda:
 ```cpp
 connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, [this](const QString &text) {
     ui->lineEdit_participant->clear();
     ui->lineEdit_participant->addItems(atCsvData_["PATCH:" + text]);
-    ...
+    // perno: ripopola in base al CAD selezionato
+    repopPerno(ui->comboBox_meta_perno_materiale, "PERNO_MATERIALE");
+    repopPerno(ui->comboBox_meta_perno_diametro,  "PERNO_DIAMETRO");
+    repopPerno(ui->comboBox_meta_perno_numero,    "PERNO_NUMERO");
+    repopPerno(ui->comboBox_meta_perno_posizione, "PERNO_POSIZIONE");
 });
 ```
-Quando l'operatore seleziona un ID CAD, il dropdown ID Patch si popola automaticamente
-con i PATCH figli dichiarati nel CSV.
+Quando l'operatore seleziona un ID CAD, ID Patch e i 4 dropdown Perno si ripopolano
+automaticamente con i figli del CAD dichiarati nel CSV.
 
 **Cosa C — raccolta metadati e avvio registrazione:**
 In `startRecording()`, prima di creare l'oggetto `recording`, tutti i valori
 dell'interfaccia vengono raccolti in una `std::map<std::string,std::string>` e
-passati al costruttore di `recording` (vedere modifica 6).
+passati al costruttore di `recording` (vedere modifica 6). Campi raccolti:
+`cad_id`, `patch_id`, `operator`, `material_id`, `test_id`, `note`,
+`perno_materiale`, `perno_diametro`, `perno_numero`, `perno_posizione`.
 
 **Conflitti futuri:** tutto il codice [ADAPTRONICS] è in blocchi separati e delimitati.
 
@@ -163,6 +176,10 @@ Se `metadata` non è vuota, nel blocco `<info>` della FileHeader XDF viene aggiu
   <material_id>acciaio</material_id>
   <test_id>T-001</test_id>
   <note>Nota libera</note>
+  <perno_materiale>acciaio</perno_materiale>
+  <perno_diametro>M6</perno_diametro>
+  <perno_numero>2</perno_numero>
+  <perno_posizione>fronte</perno_posizione>
 </adaptronics>
 ```
 
@@ -193,11 +210,20 @@ OPERATOR,Mario Rossi,
 OPERATOR,Anna Bianchi,
 TEST,T-001,
 TEST,T-002,
+PERNO_MATERIALE,acciaio,91912
+PERNO_MATERIALE,titanio,91912
+PERNO_DIAMETRO,M6,91912
+PERNO_DIAMETRO,M8,91912
+PERNO_NUMERO,1,91912
+PERNO_NUMERO,2,91912
+PERNO_POSIZIONE,fronte,91912
+PERNO_POSIZIONE,retro,91912
 ```
 
-- Righe `PROD` non più necessarie (Production Code rimosso dall'interfaccia)
 - `PATCH` usa come `PARENT_ID` il codice `CAD` direttamente
 - `MATERIAL`, `OPERATOR`, `TEST` non hanno gerarchia (PARENT_ID vuoto)
+- `PERNO_MATERIALE`, `PERNO_DIAMETRO`, `PERNO_NUMERO`, `PERNO_POSIZIONE` usano il codice `CAD` come `PARENT_ID`
+  → i dropdown Perno si aggiornano automaticamente quando si seleziona un ID CAD
 
 ---
 

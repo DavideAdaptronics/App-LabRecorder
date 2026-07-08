@@ -75,13 +75,23 @@ MainWindow::MainWindow(QWidget *parent, const char *config_file)
 	connect(ui->lineEdit_session, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
 	connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
 
-	// [ADAPTRONICS] tendina a cascata: CAD ID → ID Patch direttamente (Production Code rimosso)
-	// quando CAD ID cambia: ripopola ID Patch con i PATCH figli del CAD selezionato
+	// [ADAPTRONICS] tendina a cascata: CAD ID → ID Patch + 4 campi Perno
+	// quando CAD ID cambia: ripopola ID Patch e i 4 dropdown Perno con i figli del CAD selezionato
 	connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, [this](const QString &text) {
 		ui->lineEdit_participant->clear();
 		ui->lineEdit_participant->addItems(atCsvData_["PATCH:" + text]);
 		if (ui->lineEdit_participant->completer())
 			ui->lineEdit_participant->completer()->setCaseSensitivity(Qt::CaseInsensitive);
+		// perno: ripopola in base al CAD selezionato
+		auto repopPerno = [&](QComboBox *cb, const QString &csvKey) {
+			cb->clear();
+			cb->addItems(atCsvData_[csvKey + ":" + text]);
+			cb->setCurrentIndex(-1);
+		};
+		repopPerno(ui->comboBox_meta_perno_materiale, "PERNO_MATERIALE");
+		repopPerno(ui->comboBox_meta_perno_diametro,  "PERNO_DIAMETRO");
+		repopPerno(ui->comboBox_meta_perno_numero,    "PERNO_NUMERO");
+		repopPerno(ui->comboBox_meta_perno_posizione, "PERNO_POSIZIONE");
 	});
 	// [FINE ADAPTRONICS] tendina a cascata
 	connect(ui->input_blocktask, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
@@ -495,7 +505,11 @@ void MainWindow::startRecording() {
 		sessionMetadata["operator"]    = ui->comboBox_meta_operator->currentText().toStdString();
 		sessionMetadata["material_id"] = ui->comboBox_meta_material->currentText().toStdString();
 		sessionMetadata["test_id"]     = ui->comboBox_meta_test->currentText().toStdString();
-		sessionMetadata["note"]        = ui->plainTextEdit_meta_note->toPlainText().toStdString(); // [ADAPTRONICS] QPlainTextEdit → toPlainText()
+		sessionMetadata["note"]              = ui->plainTextEdit_meta_note->toPlainText().toStdString(); // [ADAPTRONICS] QPlainTextEdit → toPlainText()
+		sessionMetadata["perno_materiale"]   = ui->comboBox_meta_perno_materiale->currentText().toStdString();
+		sessionMetadata["perno_diametro"]    = ui->comboBox_meta_perno_diametro->currentText().toStdString();
+		sessionMetadata["perno_numero"]      = ui->comboBox_meta_perno_numero->currentText().toStdString();
+		sessionMetadata["perno_posizione"]   = ui->comboBox_meta_perno_posizione->currentText().toStdString();
 		// [ADAPTRONICS] END — raccolta metadati sessione
 
 		currentRecording = std::make_unique<recording>(recFilename.toStdString(),
@@ -756,7 +770,28 @@ void MainWindow::loadAtCsv(const QString &cfgDir) {
 		ui->comboBox_meta_test->setEditText(text);
 		ui->comboBox_meta_test->blockSignals(false);
 	});
-	// [ADAPTRONICS] END — filtri metadati
+	// [ADAPTRONICS] BEGIN — perno: 4 dropdown dipendenti da CAD, filtro "inizia con"
+	//   All'avvio i campi sono vuoti (nessun CAD selezionato → nessun figlio disponibile).
+	//   Vengono ripopolati dalla cascata CAD→Perno nel costruttore.
+	auto connectPernoFilter = [this](QComboBox *cb, const QString &csvPrefix) {
+		cb->setCurrentIndex(-1);
+		connect(cb->lineEdit(), &QLineEdit::textEdited, this, [this, cb, csvPrefix](const QString &text) {
+			const QString cadText = ui->lineEdit_acq->currentText();
+			const QStringList list = atCsvData_[csvPrefix + ":" + cadText];
+			cb->blockSignals(true);
+			cb->clear();
+			for (const QString &item : list)
+				if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
+					cb->addItem(item);
+			cb->setEditText(text);
+			cb->blockSignals(false);
+		});
+	};
+	connectPernoFilter(ui->comboBox_meta_perno_materiale, "PERNO_MATERIALE");
+	connectPernoFilter(ui->comboBox_meta_perno_diametro,  "PERNO_DIAMETRO");
+	connectPernoFilter(ui->comboBox_meta_perno_numero,    "PERNO_NUMERO");
+	connectPernoFilter(ui->comboBox_meta_perno_posizione, "PERNO_POSIZIONE");
+	// [ADAPTRONICS] END — filtri perno
 }
 // [FINE ADAPTRONICS]
 
