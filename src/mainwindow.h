@@ -82,6 +82,12 @@ private:
 	QString legacyTemplate;
 	std::unique_ptr<Ui::MainWindow> ui; // window pointer
 
+	// [ADAPTRONICS] notifica completamento registrazione via stdout + file JSON di fallback
+	QString lastRecFilename_;
+	std::map<std::string, std::string> lastSessionMetadata_;
+	QString buildCompletionJson() const;
+	void notifyRecordingDone(const QString &cfgDir) const;
+
 	// [ADAPTRONICS] struttura dati per menu a tendina a cascata popolati da LabRecorder_AT.csv
 	// chiave: "TYPE" per livello radice, "TYPE:PARENT_ID" per livelli figli
 	// ogni voce è una coppia (id, operatore): operatore vuoto = visibile a tutti

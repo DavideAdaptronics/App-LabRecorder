@@ -17,6 +17,7 @@
 using QRegExp = QRegularExpression;
 #endif
 
+#include <iostream>  // [ADAPTRONICS] std::cout per notifica completamento registrazione
 #include <string>
 #include <vector>
 
@@ -510,6 +511,9 @@ void MainWindow::startRecording() {
 		sessionMetadata["perno_diametro"]    = ui->comboBox_meta_perno_diametro->currentText().toStdString();
 		sessionMetadata["perno_numero"]      = ui->comboBox_meta_perno_numero->currentText().toStdString();
 		sessionMetadata["perno_posizione"]   = ui->comboBox_meta_perno_posizione->currentText().toStdString();
+		// [ADAPTRONICS] salva path e metadati per la notifica di completamento in stopRecording()
+		lastRecFilename_     = recFilename;
+		lastSessionMetadata_ = sessionMetadata;
 		// [ADAPTRONICS] END — raccolta metadati sessione
 
 		currentRecording = std::make_unique<recording>(recFilename.toStdString(),
@@ -533,6 +537,11 @@ void MainWindow::stopRecording() {
 		ui->startButton->setEnabled(true);
 		ui->stopButton->setEnabled(false);
 		statusBar()->showMessage("Stopped");
+		// [ADAPTRONICS] notifica completamento: stdout (primario) + last_recording.json (fallback)
+		if (!lastRecFilename_.isEmpty()) {
+			QString cfgDir = QFileInfo(QCoreApplication::applicationFilePath()).absolutePath();
+			notifyRecordingDone(cfgDir);
+		}
 	} else if (!hideWarnings) {
 		QMessageBox::information(
 			this, "Not recording", "There is not ongoing recording", QMessageBox::Ok);
@@ -673,6 +682,41 @@ QString MainWindow::counterPlaceholder() const { return ui->check_bids->isChecke
 void MainWindow::printReplacedFilename() {
 	ui->locationLabel->setText(
 		ui->rootEdit->text() + '\n' + replaceFilename(ui->lineEdit_template->text()));
+}
+
+// [ADAPTRONICS] assembla il JSON di completamento registrazione
+// formato: {"status":"done","path":"...","cad_id":"...","patch_id":"...",...}
+QString MainWindow::buildCompletionJson() const {
+	QString json = "{";
+	json += "\"status\":\"done\",";
+	json += "\"path\":\"" + QString(lastRecFilename_).replace('\\', '/') + "\"";
+	for (const auto &kv : lastSessionMetadata_) {
+		QString key   = QString::fromStdString(kv.first);
+		QString value = QString::fromStdString(kv.second)
+			.replace('\\', "\\\\").replace('"', "\\\"").replace('\n', "\\n");
+		json += ",\"" + key + "\":\"" + value + "\"";
+	}
+	json += "}";
+	return json;
+}
+
+// [ADAPTRONICS] notifica il completamento della registrazione:
+//   1. stdout  → letto dalla GUI Python via pipe (primario)
+//   2. file JSON → fallback garantito su disco nella stessa cartella del cfg
+void MainWindow::notifyRecordingDone(const QString &cfgDir) const {
+	const QString json = buildCompletionJson();
+
+	// 1. stdout
+	std::cout << "[LabRecorder] RECORDING_DONE:" << json.toStdString() << std::endl;
+	std::cout.flush();
+
+	// 2. fallback file JSON
+	QString jsonPath = cfgDir + "/last_recording.json";
+	QFile f(jsonPath);
+	if (f.open(QIODevice::WriteOnly | QIODevice::Text | QIODevice::Truncate)) {
+		QTextStream out(&f);
+		out << json << "\n";
+	}
 }
 
 // [ADAPTRONICS] helper: restituisce la lista filtrata per operatore corrente
