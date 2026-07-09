@@ -14,7 +14,11 @@
    <string>Lab Recorder</string>
   </property>
   <widget class="QWidget" name="centralwidget">
+   <!-- [ADAPTRONICS] columnStretch 1:1:1 per mantenere le 3 colonne a larghezza uguale -->
    <layout class="QGridLayout" name="gridLayout_master">
+    <attribute name="columnStretch">
+     <string>1,1,1</string>
+    </attribute>
     <item row="0" column="0">
      <widget class="QGroupBox" name="groupBox_recording">
       <property name="title">
@@ -131,7 +135,10 @@
       </property>
       <layout class="QHBoxLayout" name="horizontalLayout_studyRoot">
        <item>
-        <widget class="QLabel" name="locationLabel"/>
+        <widget class="QLabel" name="locationLabel">
+          <!-- [ADAPTRONICS] wordWrap: il percorso lungo va a capo invece di espandere la colonna -->
+          <property name="wordWrap"><bool>true</bool></property>
+        </widget>
        </item>
       </layout>
      </widget>
@@ -341,47 +348,40 @@
       <string>Metadati Sessione</string>
      </property>
      <layout class="QGridLayout" name="gridLayout_metadata">
-      <item row="0" column="0">
+      <!-- [ADAPTRONICS] spunta "Mostra tutto": disabilita il filtro per operatore su tutte le tendine -->
+      <item row="0" column="0" colspan="2">
+       <widget class="QCheckBox" name="checkBox_showAll">
+        <property name="text"><string>Mostra tutto (disabilita filtro operatore)</string></property>
+       </widget>
+      </item>
+      <item row="1" column="0">
        <widget class="QLabel" name="label_meta_operator">
         <property name="text"><string>Operator</string></property>
        </widget>
       </item>
-      <item row="0" column="1">
+      <item row="1" column="1">
        <widget class="QComboBox" name="comboBox_meta_operator">
         <property name="editable"><bool>true</bool></property>
        </widget>
       </item>
-      <item row="1" column="0">
+      <item row="2" column="0">
        <widget class="QLabel" name="label_meta_material">
         <property name="text"><string>Material ID</string></property>
        </widget>
       </item>
-      <item row="1" column="1">
+      <item row="2" column="1">
        <widget class="QComboBox" name="comboBox_meta_material">
         <property name="editable"><bool>true</bool></property>
        </widget>
       </item>
-      <item row="2" column="0">
+      <item row="3" column="0">
        <widget class="QLabel" name="label_meta_test">
         <property name="text"><string>Test ID</string></property>
        </widget>
       </item>
-      <item row="2" column="1">
+      <item row="3" column="1">
        <widget class="QComboBox" name="comboBox_meta_test">
         <property name="editable"><bool>true</bool></property>
-       </widget>
-      </item>
-      <item row="3" column="0">
-       <widget class="QLabel" name="label_meta_note">
-        <property name="text"><string>Note</string></property>
-       </widget>
-      </item>
-      <!-- [ADAPTRONICS] convertito da QLineEdit a QPlainTextEdit per supporto testo multilinea nelle note -->
-      <item row="3" column="1">
-       <widget class="QPlainTextEdit" name="plainTextEdit_meta_note">
-        <property name="minimumSize">
-         <size><width>0</width><height>60</height></size>
-        </property>
        </widget>
       </item>
       <!-- [ADAPTRONICS] gruppo perno: 4 campi dipendenti da ID CAD, popolati da CSV -->
@@ -432,7 +432,20 @@
         </layout>
        </widget>
       </item>
-      <item row="5" column="0" colspan="2">
+      <item row="5" column="0">
+       <widget class="QLabel" name="label_meta_note">
+        <property name="text"><string>Note</string></property>
+       </widget>
+      </item>
+      <!-- [ADAPTRONICS] convertito da QLineEdit a QPlainTextEdit per supporto testo multilinea nelle note -->
+      <item row="5" column="1">
+       <widget class="QPlainTextEdit" name="plainTextEdit_meta_note">
+        <property name="minimumSize">
+         <size><width>0</width><height>60</height></size>
+        </property>
+       </widget>
+      </item>
+      <item row="6" column="0" colspan="2">
        <spacer name="verticalSpacer_metadata">
         <property name="orientation"><enum>Qt::Vertical</enum></property>
         <property name="sizeHint" stdset="0">

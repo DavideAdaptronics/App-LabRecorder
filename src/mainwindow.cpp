@@ -79,13 +79,13 @@ MainWindow::MainWindow(QWidget *parent, const char *config_file)
 	// quando CAD ID cambia: ripopola ID Patch e i 4 dropdown Perno con i figli del CAD selezionato
 	connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, [this](const QString &text) {
 		ui->lineEdit_participant->clear();
-		ui->lineEdit_participant->addItems(atCsvData_["PATCH:" + text]);
+		ui->lineEdit_participant->addItems(atFilteredList("PATCH:" + text));
 		if (ui->lineEdit_participant->completer())
 			ui->lineEdit_participant->completer()->setCaseSensitivity(Qt::CaseInsensitive);
-		// perno: ripopola in base al CAD selezionato
+		// [ADAPTRONICS] perno: ripopola in base al CAD selezionato, rispettando il filtro operatore
 		auto repopPerno = [&](QComboBox *cb, const QString &csvKey) {
 			cb->clear();
-			cb->addItems(atCsvData_[csvKey + ":" + text]);
+			cb->addItems(atFilteredList(csvKey + ":" + text));
 			cb->setCurrentIndex(-1);
 		};
 		repopPerno(ui->comboBox_meta_perno_materiale, "PERNO_MATERIALE");
@@ -675,10 +675,72 @@ void MainWindow::printReplacedFilename() {
 		ui->rootEdit->text() + '\n' + replaceFilename(ui->lineEdit_template->text()));
 }
 
+// [ADAPTRONICS] helper: restituisce la lista filtrata per operatore corrente
+// voci con operatore vuoto → visibili a tutti
+// voci con operatore valorizzato → solo se corrisponde a currentOperator_ o atShowAll_ è true
+QStringList MainWindow::atFilteredList(const QString &key) const {
+	// il filtro usa l'operatore attualmente selezionato nel campo, non l'username Windows
+	const QString selectedOp = ui->comboBox_meta_operator->currentText();
+	QStringList out;
+	for (const auto &pair : atCsvData_.value(key))
+		if (pair.second.isEmpty() || atShowAll_ || pair.second == selectedOp)
+			out << pair.first;
+	return out;
+}
+
+// [ADAPTRONICS] ripopola tutti i dropdown dipendenti dall'operatore
+// chiamato all'avvio e ogni volta che cambia la spunta "Mostra tutto"
+void MainWindow::repopulateAtDropdowns() {
+	// Il campo Operator mostra SEMPRE tutti gli operatori, non viene filtrato.
+	// blockSignals evita che il currentTextChanged dell'Operator scatti mentre lo ripopoliamo
+	// e richiami repopulateAtDropdowns in loop.
+	{
+		QSignalBlocker blocker(ui->comboBox_meta_operator);
+		QString prevOp = ui->comboBox_meta_operator->currentText();
+		ui->comboBox_meta_operator->clear();
+		for (const auto &pair : atCsvData_.value("OPERATOR"))
+			ui->comboBox_meta_operator->addItem(pair.first);
+		// ripristina l'operatore selezionato (o pre-seleziona l'username Windows se vuoto)
+		const QString restoreOp = prevOp.isEmpty() ? currentOperator_ : prevOp;
+		if (!restoreOp.isEmpty())
+			ui->comboBox_meta_operator->setCurrentText(restoreOp);
+		else
+			ui->comboBox_meta_operator->setCurrentIndex(-1);
+	}
+
+	// ID CAD, Material, Test: filtrati per operatore selezionato
+	ui->lineEdit_acq->clear();
+	ui->lineEdit_acq->addItems(atFilteredList("CAD"));
+	ui->lineEdit_acq->setCurrentIndex(-1);
+
+	ui->comboBox_meta_material->clear();
+	ui->comboBox_meta_material->addItems(atFilteredList("MATERIAL"));
+	ui->comboBox_meta_material->setCurrentIndex(-1);
+
+	ui->comboBox_meta_test->clear();
+	ui->comboBox_meta_test->addItems(atFilteredList("TEST"));
+	ui->comboBox_meta_test->setCurrentIndex(-1);
+
+	// ID Patch e Perno: dipendono dal CAD corrente → svuotati (nessun CAD selezionato)
+	ui->lineEdit_participant->clear();
+	ui->lineEdit_participant->setCurrentIndex(-1);
+	ui->comboBox_meta_perno_materiale->clear();
+	ui->comboBox_meta_perno_materiale->setCurrentIndex(-1);
+	ui->comboBox_meta_perno_diametro->clear();
+	ui->comboBox_meta_perno_diametro->setCurrentIndex(-1);
+	ui->comboBox_meta_perno_numero->clear();
+	ui->comboBox_meta_perno_numero->setCurrentIndex(-1);
+	ui->comboBox_meta_perno_posizione->clear();
+	ui->comboBox_meta_perno_posizione->setCurrentIndex(-1);
+}
+
 // [ADAPTRONICS] legge LabRecorder_AT.csv e popola atCsvData_ per le tendine a cascata
-// formato CSV: TYPE,ID,PARENT_ID (prima riga = intestazione, ignorata)
-// esempio riga: PROD,292929,91912
+// formato CSV: TYPE,ID,PARENT_ID,OPERATOR (prima riga = intestazione, ignorata)
+// OPERATOR opzionale: vuoto = voce visibile a tutti; valorizzato = visibile solo a quell'operatore
 void MainWindow::loadAtCsv(const QString &cfgDir) {
+	// [ADAPTRONICS] legge username Windows per pre-compilare il campo Operator e filtrare le voci
+	currentOperator_ = QString::fromLocal8Bit(qgetenv("USERNAME"));
+
 	QString csvPath = cfgDir + "/LabRecorder_AT.csv";
 	QFile file(csvPath);
 	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
@@ -686,101 +748,83 @@ void MainWindow::loadAtCsv(const QString &cfgDir) {
 		return;
 	}
 	QTextStream in(&file);
-	in.readLine(); // salta intestazione TYPE,ID,PARENT_ID
+	in.readLine(); // salta intestazione TYPE,ID,PARENT_ID,OPERATOR
 	while (!in.atEnd()) {
 		QString line = in.readLine().trimmed();
 		if (line.isEmpty()) continue;
 		QStringList parts = line.split(',');
 		if (parts.size() < 2) continue;
-		QString type     = parts[0].trimmed().toUpper();
-		QString id       = parts[1].trimmed();
-		QString parentId = parts.size() > 2 ? parts[2].trimmed() : "";
-		QString key      = parentId.isEmpty() ? type : type + ":" + parentId;
-		atCsvData_[key].append(id);
+		QString type       = parts[0].trimmed().toUpper();
+		QString id         = parts[1].trimmed();
+		QString parentId   = parts.size() > 2 ? parts[2].trimmed() : "";
+		QString opFilter   = parts.size() > 3 ? parts[3].trimmed() : "";
+		QString key        = parentId.isEmpty() ? type : type + ":" + parentId;
+		atCsvData_[key].append(qMakePair(id, opFilter));
 	}
-	// [ADAPTRONICS] BEGIN — popola ID CAD e collega filtro "inizia con" mentre l'utente digita
-	//   Quando l'utente scrive "91", la tendina mostra solo le voci che iniziano con "91".
-	//   blockSignals evita che la cascata (CAD → Patch) scatti ad ogni tasto premuto.
-	ui->lineEdit_acq->addItems(atCsvData_["CAD"]);
-	ui->lineEdit_acq->setCurrentIndex(-1); // [ADAPTRONICS] campo vuoto all'avvio
+	// [ADAPTRONICS] BEGIN — popola tutti i dropdown e collega i filtri "inizia con"
+
+	// popola al primo caricamento (applica già il filtro operatore)
+	repopulateAtDropdowns();
+
+	// filtro "inizia con" per ID CAD
 	connect(ui->lineEdit_acq->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
-		const QStringList &fullList = atCsvData_["CAD"];
 		ui->lineEdit_acq->blockSignals(true);
 		ui->lineEdit_acq->clear();
-		for (const QString &item : fullList)
+		for (const QString &item : atFilteredList("CAD"))
 			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
 				ui->lineEdit_acq->addItem(item);
 		ui->lineEdit_acq->setEditText(text);
 		ui->lineEdit_acq->blockSignals(false);
 	});
-	// [ADAPTRONICS] END — filtro ID CAD
 
-	// [ADAPTRONICS] BEGIN — popola ID Patch e collega filtro "inizia con"
-	//   Filtra tra i PATCH figli del CAD attualmente selezionato.
+	// filtro "inizia con" per ID Patch (figli del CAD corrente)
 	connect(ui->lineEdit_participant->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
 		const QString cadText = ui->lineEdit_acq->currentText();
-		const QStringList patchList = atCsvData_["PATCH:" + cadText];
 		ui->lineEdit_participant->blockSignals(true);
 		ui->lineEdit_participant->clear();
-		for (const QString &item : patchList)
+		for (const QString &item : atFilteredList("PATCH:" + cadText))
 			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
 				ui->lineEdit_participant->addItem(item);
 		ui->lineEdit_participant->setEditText(text);
 		ui->lineEdit_participant->blockSignals(false);
 	});
-	// [ADAPTRONICS] END — filtro ID Patch
 
-	// popola pannello metadati destra (indipendenti, nessuna cascata)
-	// [ADAPTRONICS] BEGIN — popola metadati con filtro "inizia con" e campo vuoto all'avvio
-	ui->comboBox_meta_operator->addItems(atCsvData_["OPERATOR"]);
-	ui->comboBox_meta_operator->setCurrentIndex(-1);
+	// filtri per Operator, Material, Test
+	auto connectSimpleFilter = [this](QComboBox *cb, const QString &key) {
+		connect(cb->lineEdit(), &QLineEdit::textEdited, this, [this, cb, key](const QString &text) {
+			cb->blockSignals(true);
+			cb->clear();
+			for (const QString &item : atFilteredList(key))
+				if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
+					cb->addItem(item);
+			cb->setEditText(text);
+			cb->blockSignals(false);
+		});
+	};
+	connectSimpleFilter(ui->comboBox_meta_material, "MATERIAL");
+	connectSimpleFilter(ui->comboBox_meta_test,     "TEST");
+	// Operator: filtro "inizia con" mostra sempre tutti (no filtro operatore su se stesso)
 	connect(ui->comboBox_meta_operator->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
-		const QStringList &list = atCsvData_["OPERATOR"];
 		ui->comboBox_meta_operator->blockSignals(true);
 		ui->comboBox_meta_operator->clear();
-		for (const QString &item : list)
-			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
-				ui->comboBox_meta_operator->addItem(item);
+		for (const auto &pair : atCsvData_.value("OPERATOR"))
+			if (text.isEmpty() || pair.first.startsWith(text, Qt::CaseInsensitive))
+				ui->comboBox_meta_operator->addItem(pair.first);
 		ui->comboBox_meta_operator->setEditText(text);
 		ui->comboBox_meta_operator->blockSignals(false);
 	});
-
-	ui->comboBox_meta_material->addItems(atCsvData_["MATERIAL"]);
-	ui->comboBox_meta_material->setCurrentIndex(-1);
-	connect(ui->comboBox_meta_material->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
-		const QStringList &list = atCsvData_["MATERIAL"];
-		ui->comboBox_meta_material->blockSignals(true);
-		ui->comboBox_meta_material->clear();
-		for (const QString &item : list)
-			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
-				ui->comboBox_meta_material->addItem(item);
-		ui->comboBox_meta_material->setEditText(text);
-		ui->comboBox_meta_material->blockSignals(false);
+	// quando l'operatore selezionato cambia → ripopola i dropdown filtrati
+	connect(ui->comboBox_meta_operator, &QComboBox::currentTextChanged, this, [this](const QString &) {
+		repopulateAtDropdowns();
 	});
 
-	ui->comboBox_meta_test->addItems(atCsvData_["TEST"]);
-	ui->comboBox_meta_test->setCurrentIndex(-1);
-	connect(ui->comboBox_meta_test->lineEdit(), &QLineEdit::textEdited, this, [this](const QString &text) {
-		const QStringList &list = atCsvData_["TEST"];
-		ui->comboBox_meta_test->blockSignals(true);
-		ui->comboBox_meta_test->clear();
-		for (const QString &item : list)
-			if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
-				ui->comboBox_meta_test->addItem(item);
-		ui->comboBox_meta_test->setEditText(text);
-		ui->comboBox_meta_test->blockSignals(false);
-	});
-	// [ADAPTRONICS] BEGIN — perno: 4 dropdown dipendenti da CAD, filtro "inizia con"
-	//   All'avvio i campi sono vuoti (nessun CAD selezionato → nessun figlio disponibile).
-	//   Vengono ripopolati dalla cascata CAD→Perno nel costruttore.
+	// filtri per i 4 campi Perno (figli del CAD corrente, filtrati per operatore)
 	auto connectPernoFilter = [this](QComboBox *cb, const QString &csvPrefix) {
-		cb->setCurrentIndex(-1);
 		connect(cb->lineEdit(), &QLineEdit::textEdited, this, [this, cb, csvPrefix](const QString &text) {
 			const QString cadText = ui->lineEdit_acq->currentText();
-			const QStringList list = atCsvData_[csvPrefix + ":" + cadText];
 			cb->blockSignals(true);
 			cb->clear();
-			for (const QString &item : list)
+			for (const QString &item : atFilteredList(csvPrefix + ":" + cadText))
 				if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
 					cb->addItem(item);
 			cb->setEditText(text);
@@ -791,7 +835,13 @@ void MainWindow::loadAtCsv(const QString &cfgDir) {
 	connectPernoFilter(ui->comboBox_meta_perno_diametro,  "PERNO_DIAMETRO");
 	connectPernoFilter(ui->comboBox_meta_perno_numero,    "PERNO_NUMERO");
 	connectPernoFilter(ui->comboBox_meta_perno_posizione, "PERNO_POSIZIONE");
-	// [ADAPTRONICS] END — filtri perno
+
+	// spunta "Mostra tutto": toglie il filtro operatore e ripopola tutte le tendine
+	connect(ui->checkBox_showAll, &QCheckBox::toggled, this, [this](bool checked) {
+		atShowAll_ = checked;
+		repopulateAtDropdowns();
+	});
+	// [ADAPTRONICS] END — filtri
 }
 // [FINE ADAPTRONICS]
 

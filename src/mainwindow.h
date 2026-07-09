@@ -84,8 +84,12 @@ private:
 
 	// [ADAPTRONICS] struttura dati per menu a tendina a cascata popolati da LabRecorder_AT.csv
 	// chiave: "TYPE" per livello radice, "TYPE:PARENT_ID" per livelli figli
-	// esempio: "CAD" -> ["91912","91913"], "PROD:91912" -> ["292929","293000"]
-	QMap<QString, QStringList> atCsvData_;
+	// ogni voce è una coppia (id, operatore): operatore vuoto = visibile a tutti
+	QMap<QString, QList<QPair<QString,QString>>> atCsvData_;
+	QString currentOperator_;          // username Windows letto all'avvio
+	bool    atShowAll_ = false;        // true = spunta "Mostra tutto" attiva
+	QStringList atFilteredList(const QString &key) const;
+	void repopulateAtDropdowns();
 	void loadAtCsv(const QString &cfgDir);
 
 	// @Doug1983 added to suppress pop-ups when remotely starting recording

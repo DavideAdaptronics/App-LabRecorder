@@ -19,6 +19,38 @@ Le modifiche principali riguardano:
 
 ---
 
+## Distribuzione — struttura cartella operatore
+
+Dopo la compilazione (GitHub Actions → artefatto `LabRecorder.exe`),
+la cartella consegnata all'operatore deve contenere:
+
+```
+LabRecorder/
+├── LabRecorder.exe          ← eseguibile compilato (da GitHub Actions)
+├── LabRecorder.cfg          ← rinominato da LabRecorder_AT.cfg
+├── LabRecorder_AT.csv       ← lista CAD, Patch, Operator, Material, Test, Perno
+└── liblsl.dll               ← libreria LSL (dalla release ufficiale LSL)
+```
+
+> `liblsl.dll` si trova nelle [release ufficiali di liblsl](https://github.com/sccn/liblsl/releases).
+> Scaricare la versione Windows x64 e copiare la DLL accanto all'exe.
+
+**Avvio automatico della configurazione:**
+`LabRecorder.exe` cerca all'avvio un file `LabRecorder.cfg` nella stessa cartella.
+Rinominare `LabRecorder_AT.cfg` → `LabRecorder.cfg` prima della distribuzione.
+
+**Struttura delle registrazioni** (definita in `LabRecorder.cfg`):
+```
+C:/Registrazioni/Adaptronics/
+└── IDCAD_91912/
+    └── PATCH_PATCH001/
+        ├── run_001.xdf
+        ├── run_002.xdf
+        └── ...
+```
+
+---
+
 ## Modifiche effettuate
 
 ### 1. `src/mainwindow.ui` — Etichette rinominate e widget nascosti
