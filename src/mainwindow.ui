@@ -14,11 +14,7 @@
    <string>Lab Recorder</string>
   </property>
   <widget class="QWidget" name="centralwidget">
-   <!-- [ADAPTRONICS] columnStretch 1:1:1 per mantenere le 3 colonne a larghezza uguale -->
    <layout class="QGridLayout" name="gridLayout_master">
-    <attribute name="columnStretch">
-     <string>1,1,1</string>
-    </attribute>
     <item row="0" column="0">
      <widget class="QGroupBox" name="groupBox_recording">
       <property name="title">
@@ -341,8 +337,8 @@
       </widget>
      </widget>
     </item>
-   <!-- [ADAPTRONICS] pannello metadati sessione: nuova colonna destra (col=2, rowspan=3) -->
-   <item row="0" column="2" rowspan="3">
+   <!-- [ADAPTRONICS] pannello metadati sessione: riga aggiuntiva sotto i controlli (col=1, row=3) -->
+   <item row="3" column="1">
     <widget class="QGroupBox" name="groupBox_metadata">
      <property name="title">
       <string>Metadati Sessione</string>
