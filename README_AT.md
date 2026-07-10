@@ -110,7 +110,8 @@ Layout del pannello (dall'alto):
 | `plainTextEdit_meta_note` | Note | QPlainTextEdit | testo libero multilinea, nessun filtro |
 
 Altre modifiche UI:
-- `columnStretch="1,1,1"` su `gridLayout_master`: le 3 colonne mantengono larghezza uguale
+- `groupBox_metadata` posizionato a `row=3, column=1` di `gridLayout_master`: sotto ai controlli file, nella stessa colonna — layout a 2 colonne identico all'upstream (più facile da mergiare)
+- `groupBox_streams` con `rowspan=2` (righe 2-3): si espande verticalmente fino a coprire anche la riga dei metadati
 - `wordWrap=true` su `locationLabel`: il percorso lungo va a capo invece di espandere la colonna
 
 **Conflitti futuri:** blocco completamente nuovo, nessun elemento upstream toccato.

@@ -77,7 +77,8 @@
       </layout>
      </widget>
     </item>
-    <item row="2" column="0">
+    <!-- [ADAPTRONICS] rowspan=2: streams si espande fino a coprire anche la riga dei metadati -->
+    <item row="2" column="0" rowspan="2">
      <widget class="QGroupBox" name="groupBox_streams">
       <property name="title">
        <string>Record from Streams</string>
