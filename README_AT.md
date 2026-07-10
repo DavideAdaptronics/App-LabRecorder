@@ -157,6 +157,11 @@ Esempio riga stdout:
 [LabRecorder] RECORDING_DONE:{"status":"done","path":"C:/Registrazioni/.../run_001.xdf","cad_id":"91912",...}
 ```
 
+**Cosa F — auto-incremento run counter:**
+- Allo **Stop**: `spin_counter` viene incrementato di 1 automaticamente
+- Al **cambio CAD o Patch**: `buildFilename()` scansiona da 1 con il path completo (StudyRoot + template) e si posiziona sul primo run non esistente → cartella nuova = run_001, cartella già usata = run_N+1
+- Bug upstream fixato: `buildFilename()` controllava un path relativo senza StudyRoot, quindi `QFileInfo::exists()` non trovava mai niente e il counter restava bloccato a 1
+
 **Conflitti futuri:** tutto il codice [ADAPTRONICS] è in blocchi delimitati.
 Le funzioni `atFilteredList`, `repopulateAtDropdowns`, `buildCompletionJson`,
 `notifyRecordingDone` sono interamente nuove.
@@ -233,6 +238,8 @@ I valori vengono XML-escaped (`xml_escape()`) per caratteri speciali (`&`, `<`, 
 
 Il file deve trovarsi nella stessa cartella del `.cfg` (o dell'eseguibile).
 Formato: **4 colonne** `TYPE,ID,PARENT_ID,OPERATOR`
+
+> **Attenzione:** il parser usa split semplice su virgola (no RFC-4180). I valori **non devono contenere virgole**. Usare il punto come separatore decimale (es. `67.5mm` non `67,5mm`). Le virgolette nei valori non vengono gestite e rompono il parsing.
 
 - `OPERATOR` è opzionale: **vuoto** = voce visibile a tutti; **valorizzato** = visibile solo a quell'operatore
 - `CAD` e `PATCH` possono avere un operatore assegnato (filtro sui CAD visibili)

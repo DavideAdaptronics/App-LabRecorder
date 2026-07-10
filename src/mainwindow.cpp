@@ -532,6 +532,8 @@ void MainWindow::stopRecording() {
 			QString cfgDir = QFileInfo(QCoreApplication::applicationFilePath()).absolutePath();
 			notifyRecordingDone(cfgDir);
 		}
+		// [ADAPTRONICS] auto-incrementa il run counter dopo ogni stop
+		ui->spin_counter->setValue(ui->spin_counter->value() + 1);
 	} else if (!hideWarnings) {
 		QMessageBox::information(
 			this, "Not recording", "There is not ongoing recording", QMessageBox::Ok);
@@ -587,10 +589,13 @@ void MainWindow::buildFilename() {
 	QString tpl = QDir::cleanPath(ui->lineEdit_template->text());
 
 	// Auto-increment Spin/Run Number if necessary.
+	// [ADAPTRONICS] prepend StudyRoot al path: senza di esso QFileInfo::exists() controlla
+	// un path relativo che non esiste mai, lasciando il counter bloccato a 1
 	if (tpl.contains(counterPlaceholder())) {
+		QString fullTpl = QDir::cleanPath(ui->rootEdit->text() + '/' + tpl);
 		for (int i = 1; i < 1001; i++) {
 			ui->spin_counter->setValue(i);
-			if (!QFileInfo::exists(replaceFilename(tpl))) break;
+			if (!QFileInfo::exists(replaceFilename(fullTpl))) break;
 		}
 	}
 	// Sometimes lineEdit_template doesn't change so printReplacedFilename isn't triggered.
