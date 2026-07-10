@@ -9,7 +9,7 @@
 #include <QStandardPaths>
 #include <QCompleter>    // [ADAPTRONICS] necessario per setCaseSensitivity sui QComboBox
 #include <QPlainTextEdit> // [ADAPTRONICS] necessario per il campo Note multilinea
-#include <QTextStream>   // [ADAPTRONICS] necessario per leggere LabRecorder_AT.csv
+#include <QTextStream>   // [ADAPTRONICS] necessario per leggere LR_Runtime_Entries.csv
 #if QT_VERSION_MAJOR < 6
 #include <QRegExp>
 #else
@@ -76,23 +76,13 @@ MainWindow::MainWindow(QWidget *parent, const char *config_file)
 	connect(ui->lineEdit_session, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
 	connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
 
-	// [ADAPTRONICS] tendina a cascata: CAD ID → ID Patch + 4 campi Perno
-	// quando CAD ID cambia: ripopola ID Patch e i 4 dropdown Perno con i figli del CAD selezionato
+	// [ADAPTRONICS] tendina a cascata: CAD ID → ID Patch
+	// quando CAD ID cambia: ripopola ID Patch con i figli del CAD selezionato
 	connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, [this](const QString &text) {
 		ui->lineEdit_participant->clear();
 		ui->lineEdit_participant->addItems(atFilteredList("PATCH:" + text));
 		if (ui->lineEdit_participant->completer())
 			ui->lineEdit_participant->completer()->setCaseSensitivity(Qt::CaseInsensitive);
-		// [ADAPTRONICS] perno: ripopola in base al CAD selezionato, rispettando il filtro operatore
-		auto repopPerno = [&](QComboBox *cb, const QString &csvKey) {
-			cb->clear();
-			cb->addItems(atFilteredList(csvKey + ":" + text));
-			cb->setCurrentIndex(-1);
-		};
-		repopPerno(ui->comboBox_meta_perno_materiale, "PERNO_MATERIALE");
-		repopPerno(ui->comboBox_meta_perno_diametro,  "PERNO_DIAMETRO");
-		repopPerno(ui->comboBox_meta_perno_numero,    "PERNO_NUMERO");
-		repopPerno(ui->comboBox_meta_perno_posizione, "PERNO_POSIZIONE");
 	});
 	// [FINE ADAPTRONICS] tendina a cascata
 	connect(ui->input_blocktask, &QComboBox::currentTextChanged, this, &MainWindow::buildFilename);
@@ -726,9 +716,10 @@ QStringList MainWindow::atFilteredList(const QString &key) const {
 	// il filtro usa l'operatore attualmente selezionato nel campo, non l'username Windows
 	const QString selectedOp = ui->comboBox_meta_operator->currentText();
 	QStringList out;
+	QSet<QString> seen;
 	for (const auto &pair : atCsvData_.value(key))
 		if (pair.second.isEmpty() || atShowAll_ || pair.second == selectedOp)
-			out << pair.first;
+			if (!seen.contains(pair.first)) { seen.insert(pair.first); out << pair.first; }
 	return out;
 }
 
@@ -752,43 +743,57 @@ void MainWindow::repopulateAtDropdowns() {
 			ui->comboBox_meta_operator->setCurrentIndex(-1);
 	}
 
-	// ID CAD, Material, Test: filtrati per operatore selezionato
-	ui->lineEdit_acq->clear();
-	ui->lineEdit_acq->addItems(atFilteredList("CAD"));
-	ui->lineEdit_acq->setCurrentIndex(-1);
+	// helper: ripopola un QComboBox mantenendo il valore corrente se ancora valido
+	auto repopPreserving = [](QComboBox *cb, const QStringList &items) {
+		const QString prev = cb->currentText();
+		cb->clear();
+		cb->addItems(items);
+		if (!prev.isEmpty() && items.contains(prev))
+			cb->setCurrentText(prev);
+		else
+			cb->setCurrentIndex(-1);
+	};
 
-	ui->comboBox_meta_material->clear();
-	ui->comboBox_meta_material->addItems(atFilteredList("MATERIAL"));
-	ui->comboBox_meta_material->setCurrentIndex(-1);
+	// ID CAD: bloccato durante il repop per evitare che la cascata CAD→Patch scatti
+	// con valori intermedi (clear, primo item, valore finale). La cascata viene
+	// fatta una volta sola manualmente dopo, con il valore definitivo.
+	{
+		QSignalBlocker cadBlocker(ui->lineEdit_acq);
+		repopPreserving(ui->lineEdit_acq, atFilteredList("CAD"));
+	}
 
-	ui->comboBox_meta_test->clear();
-	ui->comboBox_meta_test->addItems(atFilteredList("TEST"));
-	ui->comboBox_meta_test->setCurrentIndex(-1);
+	// Material, Test: filtrati per operatore
+	repopPreserving(ui->comboBox_meta_material, atFilteredList("MATERIAL"));
+	repopPreserving(ui->comboBox_meta_test,     atFilteredList("TEST"));
 
-	// ID Patch e Perno: dipendono dal CAD corrente → svuotati (nessun CAD selezionato)
-	ui->lineEdit_participant->clear();
-	ui->lineEdit_participant->setCurrentIndex(-1);
-	ui->comboBox_meta_perno_materiale->clear();
-	ui->comboBox_meta_perno_materiale->setCurrentIndex(-1);
-	ui->comboBox_meta_perno_diametro->clear();
-	ui->comboBox_meta_perno_diametro->setCurrentIndex(-1);
-	ui->comboBox_meta_perno_numero->clear();
-	ui->comboBox_meta_perno_numero->setCurrentIndex(-1);
-	ui->comboBox_meta_perno_posizione->clear();
-	ui->comboBox_meta_perno_posizione->setCurrentIndex(-1);
+	// ID Patch: cascata manuale dal CAD definitivo, preserva valore se ancora valido
+	const QString currentCad = ui->lineEdit_acq->currentText();
+	repopPreserving(ui->lineEdit_participant, atFilteredList("PATCH:" + currentCad));
+
+	// Perno: liste globali, indipendenti da CAD e da operatore
+	auto allItems = [this](const QString &key) {
+		QStringList out;
+		for (const auto &pair : atCsvData_.value(key))
+			out << pair.first;
+		return out;
+	};
+	repopPreserving(ui->comboBox_meta_perno_materiale, allItems("PERNO_MATERIALE"));
+	repopPreserving(ui->comboBox_meta_perno_diametro,  allItems("PERNO_DIAMETRO"));
+	repopPreserving(ui->comboBox_meta_perno_numero,    allItems("PERNO_NUMERO"));
+	repopPreserving(ui->comboBox_meta_perno_posizione, allItems("PERNO_POSIZIONE"));
 }
 
-// [ADAPTRONICS] legge LabRecorder_AT.csv e popola atCsvData_ per le tendine a cascata
+// [ADAPTRONICS] legge LR_Runtime_Entries.csv e popola atCsvData_ per le tendine a cascata
 // formato CSV: TYPE,ID,PARENT_ID,OPERATOR (prima riga = intestazione, ignorata)
 // OPERATOR opzionale: vuoto = voce visibile a tutti; valorizzato = visibile solo a quell'operatore
 void MainWindow::loadAtCsv(const QString &cfgDir) {
 	// [ADAPTRONICS] legge username Windows per pre-compilare il campo Operator e filtrare le voci
 	currentOperator_ = QString::fromLocal8Bit(qgetenv("USERNAME"));
 
-	QString csvPath = cfgDir + "/LabRecorder_AT.csv";
+	QString csvPath = cfgDir + "/LR_Runtime_Entries.csv";
 	QFile file(csvPath);
 	if (!file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-		qInfo() << "[ADAPTRONICS] LabRecorder_AT.csv non trovato in: " << cfgDir;
+		qInfo() << "[ADAPTRONICS] LR_Runtime_Entries.csv non trovato in: " << cfgDir;
 		return;
 	}
 	QTextStream in(&file);
@@ -862,23 +867,11 @@ void MainWindow::loadAtCsv(const QString &cfgDir) {
 		repopulateAtDropdowns();
 	});
 
-	// filtri per i 4 campi Perno (figli del CAD corrente, filtrati per operatore)
-	auto connectPernoFilter = [this](QComboBox *cb, const QString &csvPrefix) {
-		connect(cb->lineEdit(), &QLineEdit::textEdited, this, [this, cb, csvPrefix](const QString &text) {
-			const QString cadText = ui->lineEdit_acq->currentText();
-			cb->blockSignals(true);
-			cb->clear();
-			for (const QString &item : atFilteredList(csvPrefix + ":" + cadText))
-				if (text.isEmpty() || item.startsWith(text, Qt::CaseInsensitive))
-					cb->addItem(item);
-			cb->setEditText(text);
-			cb->blockSignals(false);
-		});
-	};
-	connectPernoFilter(ui->comboBox_meta_perno_materiale, "PERNO_MATERIALE");
-	connectPernoFilter(ui->comboBox_meta_perno_diametro,  "PERNO_DIAMETRO");
-	connectPernoFilter(ui->comboBox_meta_perno_numero,    "PERNO_NUMERO");
-	connectPernoFilter(ui->comboBox_meta_perno_posizione, "PERNO_POSIZIONE");
+	// filtri per i 4 campi Perno: globali, indipendenti da CAD e operatore
+	connectSimpleFilter(ui->comboBox_meta_perno_materiale, "PERNO_MATERIALE");
+	connectSimpleFilter(ui->comboBox_meta_perno_diametro,  "PERNO_DIAMETRO");
+	connectSimpleFilter(ui->comboBox_meta_perno_numero,    "PERNO_NUMERO");
+	connectSimpleFilter(ui->comboBox_meta_perno_posizione, "PERNO_POSIZIONE");
 
 	// spunta "Mostra tutto": toglie il filtro operatore e ripopola tutte le tendine
 	connect(ui->checkBox_showAll, &QCheckBox::toggled, this, [this](bool checked) {

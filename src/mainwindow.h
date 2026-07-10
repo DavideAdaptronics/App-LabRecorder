@@ -88,7 +88,7 @@ private:
 	QString buildCompletionJson() const;
 	void notifyRecordingDone(const QString &cfgDir) const;
 
-	// [ADAPTRONICS] struttura dati per menu a tendina a cascata popolati da LabRecorder_AT.csv
+	// [ADAPTRONICS] struttura dati per menu a tendina a cascata popolati da LR_Runtime_Entries.csv
 	// chiave: "TYPE" per livello radice, "TYPE:PARENT_ID" per livelli figli
 	// ogni voce è una coppia (id, operatore): operatore vuoto = visibile a tutti
 	QMap<QString, QList<QPair<QString,QString>>> atCsvData_;

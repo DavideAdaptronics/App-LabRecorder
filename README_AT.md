@@ -14,7 +14,9 @@ Le modifiche principali riguardano:
 - Struttura cartelle: `ID_CAD / ID_Patch / run_001.xdf`
 - Pannello metadati aggiuntivo (Operator, Material ID, Test ID, Note, gruppo Perno)
 - Metadati scritti nella FileHeader XDF nel blocco `<adaptronics>`
-- Menu a tendina cascata popolati da CSV (`LabRecorder_AT.csv`)
+- Menu a tendina cascata popolati da CSV (`LR_Runtime_Entries.csv`), con filtro per operatore
+- Username Windows letto automaticamente per pre-selezionare l'operatore
+- Notifica completamento registrazione alla GUI Python via stdout + file JSON di fallback
 - Adattamento dell'interfaccia grafica al workflow degli operatori
 
 ---
@@ -28,7 +30,7 @@ la cartella consegnata all'operatore deve contenere:
 LabRecorder/
 ├── LabRecorder.exe          ← eseguibile compilato (da GitHub Actions)
 ├── LabRecorder.cfg          ← rinominato da LabRecorder_AT.cfg
-├── LabRecorder_AT.csv       ← lista CAD, Patch, Operator, Material, Test, Perno
+├── LR_Runtime_Entries.csv       ← lista CAD, Patch, Operator, Material, Test, Perno
 └── liblsl.dll               ← libreria LSL (dalla release ufficiale LSL)
 ```
 
@@ -67,9 +69,8 @@ C:/Registrazioni/Adaptronics/
 | Modality | — | `%m` | nascosto |
 | BIDS checkbox | — | — | nascosto |
 
-**Perché:** adattare la terminologia all'uso industriale. Production Code rimosso
-perché identico a ID CAD. I widget sono nascosti con `visible=false`, NON rimossi:
-il codice C++ che li referenzia continua a compilare senza errori.
+**Perché:** adattare la terminologia all'uso industriale. I widget sono nascosti con
+`visible=false`, NON rimossi: il codice C++ che li referenzia continua a compilare.
 
 **Conflitti futuri:** se l'upstream modifica queste label, il conflitto è visibile.
 Mantenere i nuovi nomi e le proprietà `visible=false`.
@@ -80,12 +81,10 @@ Mantenere i nuovi nomi e le proprietà `visible=false`.
 
 **Cosa:** i campi `lineEdit_acq` e `lineEdit_participant` sono stati
 convertiti da `QLineEdit` a `QComboBox` con proprietà `editable = true`.
-(Anche `lineEdit_session` è QComboBox, ma ora nascosto.)
+(Anche `lineEdit_session` è QComboBox, ma nascosto.)
 
 **Perché:** permette all'operatore di scegliere da un menu a tendina (popolato da CSV)
 oppure di digitare liberamente un valore non presente nella lista.
-
-**File C++ collegato:** vedere modifica 4 (`src/mainwindow.cpp`).
 
 **Conflitti futuri:** se l'upstream modifica questi widget, mantenere il tipo `QComboBox`
 e la proprietà `editable = true`.
@@ -95,76 +94,95 @@ e la proprietà `editable = true`.
 ### 3. `src/mainwindow.ui` — Pannello metadati sessione (colonna destra)
 
 **Cosa:** aggiunto un `QGroupBox` "Metadati Sessione" come terza colonna a destra.
-Contiene i campi di sessione e il gruppo Perno:
+Layout del pannello (dall'alto):
 
-| Widget | Label | Tipo | Valori |
-|--------|-------|------|--------|
-| `comboBox_meta_operator` | Operator | QComboBox editabile | CSV TYPE=OPERATOR |
-| `comboBox_meta_material` | Material ID | QComboBox editabile | CSV TYPE=MATERIAL |
-| `comboBox_meta_test` | Test ID | QComboBox editabile | CSV TYPE=TEST |
-| `plainTextEdit_meta_note` | Note | QPlainTextEdit | testo libero multilinea |
-| `comboBox_meta_perno_materiale` | Materiale | QComboBox editabile | CSV PERNO_MATERIALE:CAD |
-| `comboBox_meta_perno_diametro` | Diametro | QComboBox editabile | CSV PERNO_DIAMETRO:CAD |
-| `comboBox_meta_perno_numero` | N. perni | QComboBox editabile | CSV PERNO_NUMERO:CAD |
-| `comboBox_meta_perno_posizione` | Posizione | QComboBox editabile | CSV PERNO_POSIZIONE:CAD |
+| Widget | Label | Tipo | Note |
+|--------|-------|------|------|
+| `checkBox_showAll` | Mostra tutto | QCheckBox | disabilita filtro operatore su tutte le tendine |
+| `comboBox_meta_operator` | Operator | QComboBox editabile | sempre completa, pre-selezionata con username Windows |
+| `comboBox_meta_material` | Material ID | QComboBox editabile | CSV TYPE=MATERIAL, filtrata per operatore |
+| `comboBox_meta_test` | Test ID | QComboBox editabile | CSV TYPE=TEST, filtrata per operatore |
+| `groupBox_perno` | Perno | QGroupBox | contiene i 4 campi sotto |
+| `comboBox_meta_perno_materiale` | Materiale | QComboBox editabile | CSV TYPE=PERNO_MATERIALE, indipendente da CAD e operatore |
+| `comboBox_meta_perno_diametro` | Diametro | QComboBox editabile | CSV TYPE=PERNO_DIAMETRO, indipendente da CAD e operatore |
+| `comboBox_meta_perno_numero` | N. perni | QComboBox editabile | CSV TYPE=PERNO_NUMERO, indipendente da CAD e operatore |
+| `comboBox_meta_perno_posizione` | Posizione | QComboBox editabile | CSV TYPE=PERNO_POSIZIONE, indipendente da CAD e operatore |
+| `plainTextEdit_meta_note` | Note | QPlainTextEdit | testo libero multilinea, nessun filtro |
 
-I 4 campi Perno sono raggruppati in `QGroupBox "Perno"` e dipendono dall'ID CAD selezionato
-(cascata: cambio CAD → i dropdown si ripopolano con i figli dichiarati nel CSV).
+Altre modifiche UI:
+- `columnStretch="1,1,1"` su `gridLayout_master`: le 3 colonne mantengono larghezza uguale
+- `wordWrap=true` su `locationLabel`: il percorso lungo va a capo invece di espandere la colonna
 
-**Perché:** questi metadati non fanno parte della struttura cartelle ma vengono
-scritti nella FileHeader XDF per uso nel pipeline ML/DL.
-
-**Conflitti futuri:** blocco completamente nuovo, nessun elemento esistente toccato.
-In caso di conflitto, mantenere i blocchi `<!-- [ADAPTRONICS] ... -->`.
+**Conflitti futuri:** blocco completamente nuovo, nessun elemento upstream toccato.
 
 ---
 
-### 4. `src/mainwindow.cpp` — Aggiornamenti per QComboBox e cascata CSV
+### 4. `src/mainwindow.cpp` — Logica dropdown, filtro operatore, notifica completamento
 
-**Cosa A — segnali e accesso ai valori:**
+**Cosa A — segnali e accesso ai valori (QComboBox):**
 - Segnali: `QLineEdit::editingFinished` → `QComboBox::currentTextChanged`
-- Lettura valore: `.text()` → `.currentText()`
-- Scrittura valore: `.setText()` → `.setCurrentText()`
+- Lettura: `.text()` → `.currentText()` / Scrittura: `.setText()` → `.setCurrentText()`
+- Punti toccati: costruttore, `replaceFilename()`, `buildBidsTemplate()`, `rcsUpdateFilename()`
 
-Punti toccati: costruttore (connessioni segnali), `replaceFilename()`,
-`buildBidsTemplate()`, `rcsUpdateFilename()`.
+**Cosa B — cascata ID CAD → ID Patch:**
+Nel costruttore, quando cambia ID CAD viene ripopolato ID Patch con i figli del CAD dichiarati nel CSV,
+rispettando il filtro operatore corrente. I campi Perno sono indipendenti dal CAD selezionato.
 
-**Cosa B — cascata ID CAD → ID Patch + 4 campi Perno:**
-Nel costruttore, aggiunta connessione lambda:
-```cpp
-connect(ui->lineEdit_acq, &QComboBox::currentTextChanged, this, [this](const QString &text) {
-    ui->lineEdit_participant->clear();
-    ui->lineEdit_participant->addItems(atCsvData_["PATCH:" + text]);
-    // perno: ripopola in base al CAD selezionato
-    repopPerno(ui->comboBox_meta_perno_materiale, "PERNO_MATERIALE");
-    repopPerno(ui->comboBox_meta_perno_diametro,  "PERNO_DIAMETRO");
-    repopPerno(ui->comboBox_meta_perno_numero,    "PERNO_NUMERO");
-    repopPerno(ui->comboBox_meta_perno_posizione, "PERNO_POSIZIONE");
-});
-```
-Quando l'operatore seleziona un ID CAD, ID Patch e i 4 dropdown Perno si ripopolano
-automaticamente con i figli del CAD dichiarati nel CSV.
-
-**Cosa C — raccolta metadati e avvio registrazione:**
-In `startRecording()`, prima di creare l'oggetto `recording`, tutti i valori
-dell'interfaccia vengono raccolti in una `std::map<std::string,std::string>` e
-passati al costruttore di `recording` (vedere modifica 6). Campi raccolti:
+**Cosa C — raccolta metadati in `startRecording()`:**
+Tutti i valori dell'interfaccia vengono raccolti in `std::map<std::string,std::string>`
+e passati a `recording` → `XDFWriter` → FileHeader XDF. Campi:
 `cad_id`, `patch_id`, `operator`, `material_id`, `test_id`, `note`,
 `perno_materiale`, `perno_diametro`, `perno_numero`, `perno_posizione`.
+Path e metadati vengono anche salvati in `lastRecFilename_` / `lastSessionMetadata_`
+per la notifica di completamento.
 
-**Conflitti futuri:** tutto il codice [ADAPTRONICS] è in blocchi separati e delimitati.
+**Cosa D — filtro operatore (`loadAtCsv()`):**
+- `currentOperator_` = username Windows (`qgetenv("USERNAME")`) letto all'avvio
+- Il campo Operator è pre-selezionato con l'username; la lista mostra sempre tutti gli operatori
+- Tutte le altre tendine mostrano solo voci senza operatore + voci dell'operatore selezionato
+- Cambiare il campo Operator aggiorna istantaneamente le tendine filtrate
+- `checkBox_showAll` bypassa il filtro e mostra tutto
+- `atFilteredList(key)`: helper `const` che applica il filtro; usa `QSet<QString>` per deduplicare (se un ID appare più volte con operatori diversi, compare una sola volta nella tendina)
+- `repopulateAtDropdowns()`: ripopola tutti i dropdown, chiamato all'avvio e al toggle della spunta
+
+**Cosa E — notifica completamento registrazione (`stopRecording()`):**
+Quando la registrazione si ferma, `notifyRecordingDone()` esegue due azioni:
+1. `std::cout << "[LabRecorder] RECORDING_DONE:{...json...}"` → letto dalla GUI Python via pipe
+2. Scrive `last_recording.json` nella cartella dell'exe → fallback garantito su disco
+
+Il JSON contiene tutti i metadati della sessione + il path assoluto del file XDF.
+Esempio riga stdout:
+```
+[LabRecorder] RECORDING_DONE:{"status":"done","path":"C:/Registrazioni/.../run_001.xdf","cad_id":"91912",...}
+```
+
+**Conflitti futuri:** tutto il codice [ADAPTRONICS] è in blocchi delimitati.
+Le funzioni `atFilteredList`, `repopulateAtDropdowns`, `buildCompletionJson`,
+`notifyRecordingDone` sono interamente nuove.
 
 ---
 
-### 5. `src/mainwindow.h` — Struttura dati CSV e dichiarazione metodo
+### 5. `src/mainwindow.h` — Membri privati Adaptronics
 
-**Cosa:** aggiunti due membri privati:
+**Cosa:** aggiunti i seguenti membri privati (tutti nel blocco `[ADAPTRONICS]`):
+
 ```cpp
-QMap<QString, QStringList> atCsvData_;   // dati gerarchici del CSV
-void loadAtCsv(const QString &cfgDir);   // metodo di caricamento
+// CSV e filtro operatore
+QMap<QString, QList<QPair<QString,QString>>> atCsvData_; // (id, operatore)
+QString currentOperator_;       // username Windows
+bool    atShowAll_ = false;     // stato spunta "Mostra tutto"
+QStringList atFilteredList(const QString &key) const;
+void repopulateAtDropdowns();
+void loadAtCsv(const QString &cfgDir);
+
+// Notifica completamento registrazione
+QString lastRecFilename_;
+std::map<std::string, std::string> lastSessionMetadata_;
+QString buildCompletionJson() const;
+void notifyRecordingDone(const QString &cfgDir) const;
 ```
 
-**Conflitti futuri:** blocco nuovo, nessun membro esistente toccato.
+**Conflitti futuri:** blocco nuovo, nessun membro upstream toccato.
 
 ---
 
@@ -179,13 +197,6 @@ recording(const std::string &filename,
           bool collect_offsets = true,
           const std::map<std::string, std::string> &metadata = {}); // [ADAPTRONICS]
 ```
-Nel corpo del costruttore (`recording.cpp`), il parametro viene inoltrato a `XDFWriter`:
-```cpp
-: file_(filename, metadata), ...
-```
-
-**Perché:** la catena di propagazione è:
-`mainwindow.cpp` → `recording` → `XDFWriter` → FileHeader XDF.
 
 **Conflitti futuri:** il parametro è opzionale con default `{}`.
 Il codice upstream che chiama `recording(...)` senza metadata continua a funzionare.
@@ -194,12 +205,8 @@ Il codice upstream che chiama `recording(...)` senza metadata continua a funzion
 
 ### 7. `xdfwriter/xdfwriter.h` + `xdfwriter/xdfwriter.cpp` — Scrittura metadati nella FileHeader XDF
 
-**Cosa:** il costruttore di `XDFWriter` accetta ora un secondo parametro opzionale:
-```cpp
-XDFWriter(const std::string &filename,
-          const std::map<std::string, std::string> &metadata = {}); // [ADAPTRONICS]
-```
-Se `metadata` non è vuota, nel blocco `<info>` della FileHeader XDF viene aggiunto:
+**Cosa:** il costruttore di `XDFWriter` accetta un secondo parametro opzionale `metadata`.
+Se non è vuota, nel blocco `<info>` della FileHeader XDF viene aggiunto:
 ```xml
 <adaptronics>
   <cad_id>91912</cad_id>
@@ -215,54 +222,39 @@ Se `metadata` non è vuota, nel blocco `<info>` della FileHeader XDF viene aggiu
 </adaptronics>
 ```
 
-**Perché:** il blocco `<info>` della FileHeader è il posto standard XDF per i metadati
-globali della sessione. Qualsiasi parser XDF (MNE-Python, EEGLAB, strumenti ML/DL custom)
-può leggerlo senza conoscere estensioni proprietarie.
+I valori vengono XML-escaped (`xml_escape()`) per caratteri speciali (`&`, `<`, `>`, `"`, `'`).
 
-**Conflitti futuri:** il parametro è opzionale. Tutta la logica [ADAPTRONICS] è in un
-blocco `if (!metadata.empty())` separato dal codice upstream. Non tocca la struttura
-dei chunk XDF né il formato dei dati.
+**Conflitti futuri:** parametro opzionale. Logica in blocco `if (!metadata.empty())` separato.
 
 ---
 
-## Formato file CSV — `LabRecorder_AT.csv`
+## Formato file CSV — `LR_Runtime_Entries.csv`
 
-Il file deve trovarsi nella stessa cartella del `.cfg` (o dell'eseguibile se nessun `.cfg` è specificato).
+Il file deve trovarsi nella stessa cartella del `.cfg` (o dell'eseguibile).
+Formato: **4 colonne** `TYPE,ID,PARENT_ID,OPERATOR`
+
+- `OPERATOR` è opzionale: **vuoto** = voce visibile a tutti; **valorizzato** = visibile solo a quell'operatore
+- `CAD` e `PATCH` possono avere un operatore assegnato (filtro sui CAD visibili)
+- `PERNO_*` usano `CAD` come `PARENT_ID` e supportano il filtro operatore
 
 ```
-TYPE,ID,PARENT_ID
-CAD,91912,
-CAD,91913,
-PATCH,PATCH001,91912
-PATCH,PATCH002,91912
-PATCH,PATCH003,91913
-MATERIAL,acciaio,
-MATERIAL,alluminio,
-OPERATOR,Mario Rossi,
-OPERATOR,Anna Bianchi,
-TEST,T-001,
-TEST,T-002,
-PERNO_MATERIALE,acciaio,91912
-PERNO_MATERIALE,titanio,91912
-PERNO_DIAMETRO,M6,91912
-PERNO_DIAMETRO,M8,91912
-PERNO_NUMERO,1,91912
-PERNO_NUMERO,2,91912
-PERNO_POSIZIONE,fronte,91912
-PERNO_POSIZIONE,retro,91912
+TYPE,ID,PARENT_ID,OPERATOR
+CAD,91912,,                          ← visibile a tutti
+CAD,91914,,Mario Rossi               ← solo Mario Rossi
+PATCH,PATCH001,91912,
+MATERIAL,acciaio,,
+OPERATOR,Mario Rossi,,               ← lista operatori: sempre completa, mai filtrata
+TEST,T-001,,
+PERNO_MATERIALE,acciaio,91912,       ← visibile a tutti
+PERNO_MATERIALE,acciaio speciale,91912,Mario Rossi  ← solo Mario Rossi
 ```
-
-- `PATCH` usa come `PARENT_ID` il codice `CAD` direttamente
-- `MATERIAL`, `OPERATOR`, `TEST` non hanno gerarchia (PARENT_ID vuoto)
-- `PERNO_MATERIALE`, `PERNO_DIAMETRO`, `PERNO_NUMERO`, `PERNO_POSIZIONE` usano il codice `CAD` come `PARENT_ID`
-  → i dropdown Perno si aggiornano automaticamente quando si seleziona un ID CAD
 
 ---
 
 ## Note generali
 
 - Le modifiche sono progettate per minimizzare i conflitti con l'upstream.
-- Ogni modifica al codice C++ è marcata con `// [ADAPTRONICS] BEGIN ... // [ADAPTRONICS] END`.
-- Ogni modifica all'XML dell'UI è marcata con `<!-- [ADAPTRONICS] ... -->`.
+- Ogni modifica C++ è marcata con `// [ADAPTRONICS]` (blocchi con BEGIN/END dove estesi).
+- Ogni modifica UI è marcata con `<!-- [ADAPTRONICS] ... -->`.
 - In caso di merge conflict: mantenere sempre le righe marcate `[ADAPTRONICS]`.
 - I widget nascosti NON vengono mai rimossi: il codice C++ che li referenzia continua a compilare.
